@@ -78,6 +78,12 @@ def completion_limit(model: str, requested: int = 4096) -> int:
 def compatibility_error(exc: Exception) -> str:
     message = str(exc)
     lowered = message.lower()
+    if "opencode" in lowered and "free tier can only be used" in lowered:
+        return (
+            "OpenCode provider access restriction: this request was rejected because its free tier "
+            "requires the OpenCode client. Select a model with supported third-party API access. "
+            "Changing the API key alone may not resolve this restriction."
+        )
     if any(term in lowered for term in ("tool_choice", "function calling", "does not support tools", "tools is not supported", "unsupported parameter")):
         return f"Model/provider capability mismatch: {message}. Inspect the selected model with apsara doctor --live or configure a user model profile."
     if any(term in lowered for term in ("context length", "maximum context", "context window")):

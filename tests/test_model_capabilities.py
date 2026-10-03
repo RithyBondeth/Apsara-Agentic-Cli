@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from apsara_cli.engine.model_capabilities import completion_limit, model_capabilities
+from apsara_cli.engine.model_capabilities import compatibility_error, completion_limit, model_capabilities
 
 
 def profile(monkeypatch, tmp_path, value):
@@ -20,6 +20,12 @@ def test_user_model_limits_constrain_input_and_output(monkeypatch, tmp_path):
     assert capabilities.source == "user profile"
     assert completion_limit("openai/test-small") == 300
     assert 0 < input_token_budget("openai/test-small") < 1748
+
+
+def test_provider_client_restriction_is_distinct_from_missing_credentials():
+    message = compatibility_error(RuntimeError("OpenCode's free tier can only be used from within OpenCode"))
+    assert "provider access restriction" in message
+    assert "Changing the API key alone may not resolve" in message
 
 
 def test_known_incompatible_models_fail_before_provider_call(monkeypatch, tmp_path):

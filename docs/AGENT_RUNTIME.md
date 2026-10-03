@@ -123,6 +123,13 @@ configuration cannot change it. Example:
 Context budgets reserve output space even for small models. Invalid profiles are
 rejected, and output requests are capped by the actual configured model limits.
 
+A present key and registry metadata do not guarantee provider access. The live
+OpenCode Big Pickle probe on 2026-10-03 returned a restriction requiring the
+OpenCode client for its free tier. Apsara reports that restriction explicitly;
+changing keys alone may not resolve it. Select a model with supported third-party
+API access for live evaluation. Automatic fallback from free models remains
+limited to other known free or local models.
+
 ## Extensibility and evaluation
 
 Repository maps and symbol search cover common Python, JavaScript/TypeScript,
