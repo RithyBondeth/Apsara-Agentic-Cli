@@ -69,7 +69,7 @@ def run_hooks(event: str, payload: dict[str, Any], workspace: Path) -> HookOutco
         return HookOutcome(False, "Workspace hooks were not approved")
 
     outputs: list[str] = []
-    hook_input = json.dumps({"event": event, "payload": payload}).encode("utf-8")
+    hook_input = json.dumps({"event": event, "payload": payload})
     for index, entry in enumerate(entries, 1):
         if not isinstance(entry, dict):
             return HookOutcome(False, f"Invalid {event} hook #{index}")
@@ -81,22 +81,18 @@ def run_hooks(event: str, payload: dict[str, Any], workspace: Path) -> HookOutco
         except (TypeError, ValueError):
             return HookOutcome(False, f"Hook {event} #{index} timeout must be an integer")
         try:
-            result = subprocess.run(
-                command,
-                cwd=workspace,
-                input=hook_input,
-                capture_output=True,
-                timeout=timeout,
-                check=False,
-            )
+            from apsara_cli.engine.cancellation import run_command
+            from apsara_cli.engine.turn_checkpoints import capture_turn_workspace
+            capture_turn_workspace(workspace)
+            result = run_command(command, cwd=workspace, input_text=hook_input, timeout=timeout)
         except (OSError, subprocess.TimeoutExpired) as exc:
             return HookOutcome(False, f"Hook {event} #{index} failed: {exc}")
-        output = (result.stdout + result.stderr).decode("utf-8", errors="replace")[-4000:]
+        output = (result.stdout + result.stderr)[-4000:]
         outputs.append(output)
         if result.returncode != 0:
             return HookOutcome(False, f"Hook {event} #{index} exited {result.returncode}", output)
         try:
-            decision = json.loads(result.stdout.decode("utf-8") or "{}")
+            decision = json.loads(result.stdout or "{}")
         except json.JSONDecodeError:
             decision = {}
         if isinstance(decision, dict) and decision.get("decision") == "deny":

@@ -57,6 +57,13 @@ def _final_event(content="All done.", usage=None):
     return {"type": "stream_done", "content": content, "tool_calls": None, "usage": usage or {}}
 
 
+def _verification(arguments):
+    phase = arguments.get("phase", "full")
+    return "Verification passed.\n" + json.dumps({"phase": phase, "status": "passed", "results": [
+        {"command": ["pytest", "-q"], "status": "passed", "returncode": 0},
+    ]})
+
+
 def test_direct_final_answer():
     fake, _ = _scripted_llm([[_final_event("The answer is 42.")]])
     with patch.object(executor, "call_llm_stream", fake):
@@ -329,7 +336,7 @@ def test_generic_bash_success_does_not_replace_full_verification():
 
     async def execute(name, _arguments):
         if name == "verify_project":
-            return "Verification passed."
+            return _verification(_arguments)
         return "ok"
 
     with patch.object(executor, "call_llm_stream", fake), \
@@ -358,7 +365,7 @@ def test_multi_file_change_requires_read_only_critic_after_full_verification():
     async def execute(name, arguments):
         calls.append((name, arguments))
         if name == "verify_project":
-            return "Verification passed."
+            return _verification(arguments)
         if name == "request_critic":
             return "APPROVED"
         return "ok"
@@ -387,7 +394,7 @@ def test_mutation_after_full_verification_requires_fresh_full_verification():
     fake, state = _scripted_llm(scripts)
 
     async def execute(name, _arguments):
-        return "Verification passed." if name == "verify_project" else "ok"
+        return _verification(_arguments) if name == "verify_project" else "ok"
 
     with patch.object(executor, "call_llm_stream", fake), \
          patch.object(executor, "execute_tool_async", execute):
@@ -478,14 +485,18 @@ def test_rerunning_a_command_with_changing_output_is_not_a_loop():
     edit = _tool_call_event(
         name="edit_file", arguments='{"path": "calc.py"}', call_id="e"
     )
-    scripts = [[run_tests], [edit], [run_tests], [edit], [run_tests], [_final_event("Green.")]]
+    baseline = _tool_call_event(name="verify_project", arguments='{"phase":"baseline"}', call_id="baseline")
+    full = _tool_call_event(name="verify_project", arguments='{"phase":"full"}', call_id="full")
+    scripts = [[baseline], [run_tests], [edit], [run_tests], [edit], [run_tests], [full], [_final_event("Green.")]]
     fake, _ = _scripted_llm(scripts)
 
     # Same command, different output each time — progress, not repetition.
-    results = iter(["1 failed", "edited", "1 failed, 1 passed", "edited", "2 passed", ""])
+    results = iter(["1 failed", "1 failed, 1 passed", "2 passed"])
 
     async def changing(name, args):
-        return next(results, "")
+        if name == "verify_project":
+            return _verification(args)
+        return next(results, "") if name == "run_bash_command" else "edited"
 
     with patch.object(executor, "call_llm_stream", fake), \
          patch.object(executor, "execute_tool_async", changing):
@@ -502,11 +513,14 @@ def test_rerunning_a_command_with_identical_output_is_a_loop():
         name="run_bash_command", arguments='{"command": "pytest -q"}', call_id="t"
     )
     edit = _tool_call_event(name="edit_file", arguments='{"path": "x.py"}', call_id="e")
-    scripts = [[run_tests], [edit], [run_tests], [edit], [run_tests], [edit], [run_tests]]
+    baseline = _tool_call_event(name="verify_project", arguments='{"phase":"baseline"}', call_id="baseline")
+    scripts = [[baseline], [run_tests], [edit], [run_tests], [edit], [run_tests], [edit], [run_tests]]
     fake, _ = _scripted_llm(scripts)
 
+    async def unchanged(name, args):
+        return _verification(args) if name == "verify_project" else "1 failed"
     with patch.object(executor, "call_llm_stream", fake), \
-         patch.object(executor, "execute_tool_async", AsyncMock(return_value="1 failed")):
+         patch.object(executor, "execute_tool_async", unchanged):
         events = _run([{"role": "user", "content": "fix the tests"}])
 
     assert any(e["type"] == "blocked" for e in events), (

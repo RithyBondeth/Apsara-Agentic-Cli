@@ -8,6 +8,7 @@ from typing import Any, AsyncGenerator
 import litellm
 from apsara_cli.engine.models import DEFAULT_MODEL, resolve_litellm_request
 from apsara_cli.engine.tools import get_request_tools
+from apsara_cli.engine.model_capabilities import model_capabilities, completion_limit, compatibility_error
 
 import os as _os
 # Silence huggingface_hub's unauthenticated-request warning triggered by
@@ -70,19 +71,15 @@ def _rate_limits_from_response(value: Any) -> dict[str, str]:
     return {key: item for key, item in result.items() if item is not None}
 
 
-def estimate_request_tokens(messages: list[dict], model: str = DEFAULT_MODEL) -> int:
+def estimate_request_tokens(messages: list[dict], model: str = DEFAULT_MODEL, *, with_tools: bool = True) -> int:
     try:
         resolved_model, _provider_options = resolve_litellm_request(model)
-        return litellm.token_counter(
-            model=resolved_model,
-            messages=messages,
-            tools=get_request_tools(),
-            tool_choice="auto",
-        )
+        options = {"tools": get_request_tools(), "tool_choice": "auto"} if with_tools else {}
+        return litellm.token_counter(model=resolved_model, messages=messages, **options)
     except Exception:
         return max(
             1,
-            len(json.dumps({"messages": messages, "tools": get_request_tools()}, ensure_ascii=False, default=str)) // 3,
+            len(json.dumps({"messages": messages, "tools": get_request_tools() if with_tools else []}, ensure_ascii=False, default=str)) // 3,
         )
 
 
@@ -115,7 +112,7 @@ async def summarize_messages_with_usage(
             litellm.acompletion(
                 model=resolved_model,
                 messages=summary_messages,
-                max_tokens=300,
+                max_tokens=completion_limit(model, 300),
                 **provider_options,
             ),
             timeout=llm_call_timeout(),
@@ -169,6 +166,7 @@ async def call_llm(
         return {"error": f"No API key found for model '{model}'. Start `apsara` and add it when prompted."}, {}
 
     try:
+        model_capabilities(model).require(tools=with_tools, streaming=False)
         resolved_model, provider_options = resolve_litellm_request(model)
         request_options: dict[str, Any] = {}
         if with_tools:
@@ -177,7 +175,7 @@ async def call_llm(
             litellm.acompletion(
                 model=resolved_model,
                 messages=messages,
-                max_tokens=DEFAULT_MAX_COMPLETION_TOKENS,
+                max_tokens=completion_limit(model, DEFAULT_MAX_COMPLETION_TOKENS),
                 **request_options,
                 **provider_options,
             ),
@@ -189,11 +187,12 @@ async def call_llm(
             "error": f"Provider response timed out after {llm_call_timeout():g} seconds."
         }, {}
     except Exception as e:
-        return {"error": str(e)}, {}
+        return {"error": compatibility_error(e)}, {}
 
 
 async def call_llm_stream(
-    messages: list[dict], model: str = DEFAULT_MODEL
+    messages: list[dict], model: str = DEFAULT_MODEL, *, tools: list[dict] | None = None,
+    max_completion_tokens: int = DEFAULT_MAX_COMPLETION_TOKENS,
 ) -> AsyncGenerator[dict, None]:
     """
     Streaming LLM call with automatic retry on rate-limit errors.
@@ -210,13 +209,14 @@ async def call_llm_stream(
 
     for attempt in range(len(_RETRY_DELAYS) + 1):
         try:
+            model_capabilities(model).require(tools=True, streaming=True)
             resolved_model, provider_options = resolve_litellm_request(model)
             response = await litellm.acompletion(
                 model=resolved_model,
                 messages=messages,
-                tools=get_request_tools(),
+                tools=get_request_tools() if tools is None else tools,
                 tool_choice="auto",
-                max_tokens=DEFAULT_MAX_COMPLETION_TOKENS,
+                max_tokens=completion_limit(model, max_completion_tokens),
                 stream=True,
                 stream_options={"include_usage": True},
                 **provider_options,
@@ -310,5 +310,5 @@ async def call_llm_stream(
                     ),
                 }
                 return
-            yield {"type": "stream_error", "error": str(e)}
+            yield {"type": "stream_error", "error": compatibility_error(e)}
             return

@@ -214,6 +214,20 @@ def run_workspace_checks(options, config, args) -> list:
 
     results.extend(check_mcp_servers(options, config))
 
+    from apsara_cli.engine.model_capabilities import model_capabilities, completion_limit
+    try:
+        capabilities = model_capabilities(options.model)
+        capabilities.require(tools=True, streaming=True)
+        confirmed = capabilities.tools is True and capabilities.streaming is True
+        results.append(DoctorCheckResult(
+            "model-capabilities", "pass" if confirmed else "warn",
+            f"Source: {capabilities.source}; tools={capabilities.tools}, streaming={capabilities.streaming}, "
+            f"context={capabilities.context_window or 'unknown'}, output budget={completion_limit(options.model)}. "
+            "Use --live to confirm provider behavior.",
+        ))
+    except ValueError as exc:
+        results.append(DoctorCheckResult("model-capabilities", "fail", str(exc)))
+
     provider, env_vars, note = detect_model_credentials(options.model)
     if env_vars is None:
         status = "pass" if provider == "ollama" else "warn"
@@ -229,9 +243,14 @@ def run_workspace_checks(options, config, args) -> list:
 
 
 async def run_live_probe(options: "ResolvedOptions") -> DoctorCheckResult:
-    from apsara_cli.engine.llm import call_llm
+    from apsara_cli.engine.llm import call_llm_stream
+    import json
+    probe_messages = [{"role": "user", "content": "Call apsara_probe with nonce apsara-ready. Do not execute any other action."}]
+    probe_tool = {"type": "function", "function": {"name": "apsara_probe", "description": "Return the supplied readiness nonce. This probe never executes a tool.",
+                  "parameters": {"type": "object", "properties": {"nonce": {"type": "string"}}, "required": ["nonce"]}}}
 
-    probe_messages = [{"role": "user", "content": "Reply with the single word READY."}]
+    async def collect():
+        return [event async for event in call_llm_stream(probe_messages, model=options.model, tools=[probe_tool], max_completion_tokens=128)]
 
     with agent_runtime_context(
         workspace_root=options.workspace_root,
@@ -241,18 +260,23 @@ async def run_live_probe(options: "ResolvedOptions") -> DoctorCheckResult:
         bash_timeout_seconds=options.bash_timeout,
         confirmation_callback=lambda action, payload: False,
     ):
-        response_message, usage = await asyncio.wait_for(
-            call_llm(probe_messages, model=options.model), timeout=15
-        )
-
-    if isinstance(response_message, dict) and "error" in response_message:
-        return DoctorCheckResult("live-probe", "fail", f"Live model probe failed: {response_message['error']}")
-
-    content = str(getattr(response_message, "content", "") or "").strip()
-    usage_detail = ""
-    if usage and usage.get("total_tokens") is not None:
-        usage_detail = f" (total tokens: {usage.get('total_tokens')})"
-    return DoctorCheckResult("live-probe", "pass", f"Model responded with: {content or '[empty response]'}{usage_detail}")
+        try:
+            events = await asyncio.wait_for(collect(), timeout=30)
+        except asyncio.TimeoutError:
+            return DoctorCheckResult("live-probe", "fail", "Streaming/tool-call probe timed out.")
+    error = next((event.get("error") for event in events if event.get("type") == "stream_error"), None)
+    if error:
+        return DoctorCheckResult("live-probe", "fail", f"Live model probe failed: {error}")
+    done = next((event for event in events if event.get("type") == "stream_done"), {})
+    for call in done.get("tool_calls") or []:
+        try:
+            function = call["function"]
+            if function["name"] == "apsara_probe" and json.loads(function["arguments"]) == {"nonce": "apsara-ready"}:
+                usage = done.get("usage") or {}
+                return DoctorCheckResult("live-probe", "pass", f"Streaming and valid tool arguments confirmed; provider reported {usage.get('total_tokens', 'unknown')} tokens. No tool was executed.")
+        except (KeyError, ValueError, TypeError):
+            continue
+    return DoctorCheckResult("live-probe", "fail", "Model did not return the requested valid tool call. Agent compatibility remains unconfirmed.")
 
 
 async def doctor(args: object, config: object) -> int:

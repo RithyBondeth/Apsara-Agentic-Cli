@@ -200,15 +200,8 @@ def _run_commands(
             ))
             continue
         try:
-            completed = subprocess.run(
-                list(item.command),
-                cwd=workspace,
-                env=env,
-                capture_output=True,
-                text=True,
-                timeout=max(1, timeout),
-                check=False,
-            )
+            from apsara_cli.engine.cancellation import run_command
+            completed = run_command(list(item.command), cwd=workspace, env=env, timeout=max(1, timeout))
             output = (completed.stdout + "\n" + completed.stderr).strip()[-8000:]
             results.append(VerificationResult(
                 item.name,

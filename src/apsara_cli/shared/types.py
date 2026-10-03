@@ -13,6 +13,8 @@ class AgentRunState(str, Enum):
     VERIFYING = "verifying"
     BLOCKED = "blocked"
     COMPLETED = "completed"
+    COMPLETED_VERIFIED = "completed_verified"
+    COMPLETED_UNVERIFIED = "completed_unverified"
     FAILED = "failed"
     CANCELLED = "cancelled"
 
@@ -68,6 +70,11 @@ class AgentRun:
     changed_files: list[str] = field(default_factory=list)
     verification: list[str] = field(default_factory=list)
     error: Optional[str] = None
+    verification_status: str = "not_required"
+    critic_status: str = "not_required"
+    completion_reason: Optional[str] = None
+    verification_evidence: list[dict[str, Any]] = field(default_factory=list)
+    critic_findings: list[dict[str, Any]] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
         data = asdict(self)

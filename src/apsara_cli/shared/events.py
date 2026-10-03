@@ -174,6 +174,11 @@ def print_event(event: dict[str, Any], ui: "ConsoleUI") -> None:
 
     if event_type == "run_state":
         state = str(event.get("state", ""))
+        ui.last_run_state = state
+        if state == "completed_verified":
+            ui.success("Verified completion — " + str(event.get("reason") or "current checks passed."))
+        elif state == "completed_unverified":
+            ui.warning("Unverified completion — changes require independent checks.")
         if state == "verifying":
             ui.update_spinner_action("Apsara is verifying")
             ui.work_notice_shown = False
@@ -277,11 +282,13 @@ def print_event(event: dict[str, Any], ui: "ConsoleUI") -> None:
         return
 
     if event_type == "blocked":
+        ui.last_run_state = "blocked"
         ui.blocked(str(event.get("message", "")))
         ui.set_turn_outcome("blocked")
         return
 
     if event_type == "error":
+        ui.last_run_state = "failed"
         error_msg = str(event.get("message", ""))
         if event.get("auth_error"):
             provider = _error_provider(error_msg)

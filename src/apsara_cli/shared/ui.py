@@ -235,6 +235,9 @@ def describe_action(
         return (f"Restore checkpoint {payload.get('checkpoint_id', 'latest')}?", None, None, None, None, None)
 
     if action == "undo_turn":
+        if payload.get("force"):
+            return (f"Force rollback of agent turn {payload.get('turn_id', 'latest')}?",
+                    "This overwrites conflicting edits made after the turn. Review /diff first.", None, None, None, None)
         return (f"Roll back agent turn {payload.get('turn_id', 'latest')}?", None, None, None, None, None)
 
     if action == "export_diagnostic_content":
@@ -1213,7 +1216,9 @@ class ConsoleUI:
                 return "reject"
 
     def confirm_action(self, action: str, payload: dict[str, Any]) -> bool:
-        allows_blanket = action_allows_blanket_approval(action)
+        allows_blanket = action_allows_blanket_approval(action) and not (
+            action == "undo_turn" and payload.get("force")
+        )
 
         if self.approve_all and allows_blanket:
             return True

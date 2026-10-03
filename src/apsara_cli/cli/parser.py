@@ -192,6 +192,8 @@ def build_parser() -> argparse.ArgumentParser:
                              help="Directory for disposable benchmark workspaces and result evidence.")
     eval_parser.add_argument("--results", default=None,
                              help="Re-score an existing benchmark results.json without provider calls.")
+    eval_parser.add_argument("--compare", action="store_true", default=False,
+                             help="Run optimized and full-tool reference profiles in independent workspaces.")
     eval_parser.add_argument(
         "--repeat",
         type=_benchmark_repeat_count,
@@ -263,19 +265,25 @@ async def dispatch_command(args: argparse.Namespace, config: object) -> int:
         suite_path = Path(args.suite).resolve()
         if is_benchmark_suite(suite_path):
             if args.results:
-                if args.repeat != 1:
-                    print("--repeat is only valid with --live.")
+                if args.repeat != 1 or args.compare:
+                    print("--repeat is only valid with --live; --compare also requires --live without --results.")
                     return 2
                 results = score_benchmark_results(suite_path, Path(args.results).resolve())
             elif args.live:
                 output = Path(args.output or ".apsara/benchmarks")
-                results, results_path = await run_benchmark_suite(
-                    suite_path,
-                    output,
-                    args.model or config.defaults.model,
-                    repeats=args.repeat,
-                    min_pass_rate=args.min_pass_rate,
-                )
+                if args.compare:
+                    results, results_path = await run_benchmark_suite(
+                        suite_path, output, args.model or config.defaults.model, repeats=args.repeat,
+                        min_pass_rate=args.min_pass_rate, compare=True,
+                    )
+                    comparison_path = results_path.parent.parent / "comparison.json"
+                    print(f"Comparison: {comparison_path}")
+                    print(comparison_path.read_text(encoding="utf-8"))
+                else:
+                    results, results_path = await run_benchmark_suite(
+                        suite_path, output, args.model or config.defaults.model,
+                        repeats=args.repeat, min_pass_rate=args.min_pass_rate,
+                    )
                 print(f"Evidence: {results_path}")
                 print(f"Summary: {results_path.with_name('summary.json')}")
             else:

@@ -764,7 +764,28 @@ def _extract_command_names(command: str) -> list[str]:
     silently allow ``python -m pip`` when ``pip`` itself is not approved.
     """
     import re
-    segments = re.split(r"\|\|?|&&?|;", command)
+    # Operators inside quoted arguments are data, not command boundaries.
+    segments = []
+    quote = None
+    escaped = False
+    start = 0
+    for index, character in enumerate(command):
+        if escaped:
+            escaped = False
+            continue
+        if character == "\\" and quote != "'":
+            escaped = True
+            continue
+        if quote:
+            if character == quote:
+                quote = None
+            continue
+        if character in {"'", '"'}:
+            quote = character
+        elif character in {"|", "&", ";"}:
+            segments.append(command[start:index])
+            start = index + 1
+    segments.append(command[start:])
     names: list[str] = []
     for seg in segments:
         seg = seg.strip()
@@ -905,14 +926,8 @@ def run_bash_command(command: str) -> str:
         from apsara_cli.engine.turn_checkpoints import capture_turn_workspace
         capture_turn_workspace(_workspace_root())
         timeout_seconds = _bash_timeout()
-        result = subprocess.run(
-            command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds,
-            cwd=str(_workspace_root()),
-        )
+        from apsara_cli.engine.cancellation import run_command
+        result = run_command(command, shell=True, timeout=timeout_seconds, cwd=str(_workspace_root()))
         output = (
             f"STDOUT:\n{result.stdout}\n"
             f"STDERR:\n{result.stderr}\n"
@@ -1361,17 +1376,17 @@ def list_turn_checkpoints_tool() -> str:
     return "\n".join(format_turn_checkpoint(item) for item in turns[:20])
 
 
-def undo_turn_checkpoint(turn_id: str = "") -> str:
+def undo_turn_checkpoint(turn_id: str = "", force: bool = False) -> str:
     """Restore every built-in file mutation from one agent turn."""
     if _read_only():
         return "Error: Turn rollback is disabled in read-only mode."
     requested = turn_id or "latest"
-    if not _confirm_action("undo_turn", {"turn_id": requested}):
+    if not _confirm_action("undo_turn", {"turn_id": requested, "force": force}):
         return f"Error: rollback of turn '{requested}' was not approved."
     from apsara_cli.engine.turn_checkpoints import restore_turn_checkpoint
 
     try:
-        result = restore_turn_checkpoint(_workspace_root(), turn_id or None)
+        result = restore_turn_checkpoint(_workspace_root(), turn_id or None, force=force)
     except (FileNotFoundError, OSError, ValueError) as exc:
         return f"Error: {exc}"
     rollback = result.get("rollback") or {}
@@ -1518,6 +1533,8 @@ def verify_project(
         return "Error: Project verification was not approved."
     if _dry_run():
         return "Verification skipped in dry-run mode (commands were not executed)."
+    from apsara_cli.engine.turn_checkpoints import capture_turn_workspace
+    capture_turn_workspace(_workspace_root())
     try:
         report = run_verification(
             _workspace_root(),
@@ -1925,7 +1942,8 @@ def get_agent_tools() -> list[Dict[str, Any]]:
         _tool_definition(
             "undo_turn_checkpoint",
             "Roll back every captured file mutation from an agent turn after user approval.",
-            {"turn_id": {"type": "string", "description": "Optional turn/run id; defaults to latest."}},
+            {"turn_id": {"type": "string", "description": "Optional turn/run id; defaults to latest."},
+             "force": {"type": "boolean", "description": "Overwrite later user edits only when the user explicitly requests a forced restore."}},
         ),
         _tool_definition(
             "repository_map",
@@ -2167,6 +2185,7 @@ async def execute_tool_async(tool_name: str, arguments: Dict[str, Any]) -> str:
             "apsara_model": _current_model(),
             "auxiliary_calls": 1,
             "provider_reported_calls": 1 if usage else 0,
+            "unreported_calls": 0 if usage else 1,
         })
         _record_auxiliary_usage(usage)
         return content
@@ -2188,6 +2207,9 @@ async def execute_tool_async(tool_name: str, arguments: Dict[str, Any]) -> str:
         ):
             return f"Error: MCP tool '{tool_name}' was not approved."
         return await manager.call(tool_name, arguments)
+    if tool_name in {"verify_project", "run_bash_command"}:
+        from apsara_cli.engine.cancellation import run_interruptible
+        return await run_interruptible(execute_tool, tool_name, arguments)
     return execute_tool(tool_name, arguments)
 
 

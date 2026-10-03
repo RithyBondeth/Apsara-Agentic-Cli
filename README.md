@@ -100,12 +100,23 @@ plus staged and unstaged patches before you accept or undo a change.
 
 Every agent turn also owns an atomic checkpoint under `.apsara/turns/`.
 `/turns` lists completed and interrupted turns, while `/undo-turn [id]` restores
-all captured paths from one turn. Built-in file tools are captured lazily;
+captured paths that still match their recorded end-of-turn contents. Later user
+edits and unrelated new files are preserved. Conflicts require an explicit
+`/undo-turn [id] --force` approval, even with `--auto-approve`. Built-in file tools are captured lazily;
 before an enabled command runs, Apsara snapshots the workspace up to 100 MB
 (excluding dependency, build, Git, and Apsara state directories). Set
 `APSARA_TURN_SNAPSHOT_MAX_MB` to change that ceiling. Set
 `APSARA_ROLLBACK_FAILED_TURNS=1` to automatically roll back changed turns that
 end failed or blocked; the default preserves work for review.
+
+Changed turns finish as `completed_verified` only after passing full checks on
+the current files and receiving any required critic approval. Missing, failed,
+or stale checks block completion. Projects without a usable verifier finish as
+`completed_unverified`, with a warning and exit code 2 in one-shot mode. Inspect
+`/report` for the command evidence, critic findings, and completion reason.
+`apsara doctor --live` confirms streaming and valid tool arguments with a small
+probe that never executes a tool. Custom model limits can be set in a user-owned
+model profile; see [the runtime guide](https://github.com/RithyBondeth/Apsara-Agentic-Cli/blob/main/docs/AGENT_RUNTIME.md).
 
 `edit_file` is the primary editing tool: it replaces an exact snippet of text
 and refuses ambiguous or missing matches, so an edit can't silently land in the

@@ -8,6 +8,7 @@ import shlex
 import shutil
 import statistics
 import subprocess
+import time
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -110,11 +111,19 @@ def _unexpected_changes(case: dict[str, Any], details: dict[str, Any]) -> list[s
     return [path for path in changed if allowed and not _matches_any(path, allowed)]
 
 
+def _complete_usage_total(details: dict[str, Any]) -> int | None:
+    usage = normalize_usage(details.get("usage") or {})
+    if (details.get("usage_complete") is False or usage["unreported_calls"]
+            or usage["interrupted_calls"] or usage["total_tokens"] == 0):
+        return None
+    return usage["total_tokens"]
+
+
 def score_benchmark_case(case: dict[str, Any], details: dict[str, Any]) -> BenchmarkResult:
     """Score stored benchmark evidence without making a provider request."""
     checks: list[str] = []
     score = 0
-    state_ok = details.get("agent_state") == "completed"
+    state_ok = details.get("agent_state") in {"completed", "completed_verified"}
     score += 15 if state_ok else 0
     checks.append(f"agent state: {details.get('agent_state', 'unknown')}")
 
@@ -152,9 +161,10 @@ def score_benchmark_case(case: dict[str, Any], details: dict[str, Any]) -> Bench
 
     usage = normalize_usage(details.get("usage") or {})
     max_tokens = int(case.get("max_tokens") or 100_000)
-    tokens_ok = usage["total_tokens"] <= max_tokens
+    usage_known = _complete_usage_total(details) is not None
+    tokens_ok = usage_known and usage["total_tokens"] <= max_tokens
     score += 10 if tokens_ok else 0
-    checks.append(f"tokens: {usage['total_tokens']}/{max_tokens}")
+    checks.append(f"tokens: {usage['total_tokens']}/{max_tokens}" if usage_known else "tokens: total usage unknown or incomplete")
 
     passed = (
         state_ok
@@ -196,7 +206,7 @@ def benchmark_failure_categories(
     """Return stable machine-readable reasons for a failed benchmark trial."""
     details = result.details
     categories: list[str] = []
-    if details.get("agent_state") != "completed":
+    if details.get("agent_state") not in {"completed", "completed_verified"}:
         categories.append("agent_state")
     verification = details.get("verification") or []
     verification_runs = details.get("verification_runs") or [verification]
@@ -313,6 +323,12 @@ def aggregate_benchmark_results(
         and unstable_cases <= thresholds["max_unstable_cases"]
         and unsafe_trials <= thresholds["max_unsafe_trials"]
     )
+    token_values = [_complete_usage_total(result.details) for result in results]
+    known_tokens = [value for value in token_values if value is not None]
+    token_metrics = _metric_summary(known_tokens) if known_tokens else {
+        "average": None, "variance": None, "minimum": None, "maximum": None,
+    }
+    token_metrics.update({"sample_count": len(known_tokens), "unknown_trials": total - len(known_tokens)})
     return {
         "passed": release_passed,
         "thresholds": thresholds,
@@ -326,10 +342,7 @@ def aggregate_benchmark_results(
         "tool_calls": _metric_summary([
             int(result.details.get("tool_calls") or 0) for result in results
         ]),
-        "tokens": _metric_summary([
-            normalize_usage(result.details.get("usage") or {})["total_tokens"]
-            for result in results
-        ]),
+        "tokens": token_metrics,
         "failure_categories": dict(sorted(failures.items())),
         "cases": sorted(case_summaries, key=lambda item: item["name"]),
     }
@@ -346,7 +359,9 @@ def format_benchmark_aggregate(aggregate: dict[str, Any]) -> str:
         f"trials passed ({rate:.1f}%)",
         f"score avg {scores.get('average', 0)}; "
         f"tool calls avg {tools.get('average', 0)} var {tools.get('variance', 0)}; "
-        f"tokens avg {tokens.get('average', 0)} var {tokens.get('variance', 0)}",
+        f"tokens avg {tokens.get('average') if tokens.get('average') is not None else 'unknown'} "
+        f"var {tokens.get('variance') if tokens.get('variance') is not None else 'unknown'} "
+        f"({tokens.get('unknown_trials', 0)} trial(s) without complete usage)",
         f"stability: {aggregate.get('verification_flaky_trials', 0)} flaky trial(s), "
         f"{aggregate.get('unstable_cases', 0)} unstable case(s), "
         f"{aggregate.get('unsafe_trials', 0)} unsafe trial(s)",
@@ -357,6 +372,52 @@ def format_benchmark_aggregate(aggregate: dict[str, Any]) -> str:
             "failures: " + ", ".join(f"{key}={value}" for key, value in failures.items())
         )
     return "\n".join(lines)
+
+
+def compare_benchmark_results(optimized_path: Path, reference_path: Path) -> dict[str, Any]:
+    """Compare independent benchmark evidence without inventing missing usage."""
+    optimized = json.loads(optimized_path.read_text(encoding="utf-8"))
+    reference = json.loads(reference_path.read_text(encoding="utf-8"))
+    for key in ("model", "suite", "suite_digest"):
+        if optimized.get(key) != reference.get(key):
+            raise ValueError(f"Cannot compare benchmarks with different {key}.")
+    def trials(payload: dict[str, Any]) -> list[dict[str, Any]]:
+        return [item for item in payload.get("cases", []) if isinstance(item, dict)]
+    left, right = trials(optimized), trials(reference)
+    if not left or Counter(row.get("name") for row in left) != Counter(row.get("name") for row in right):
+        raise ValueError("Comparison requires matching cases and trial counts.")
+    def metric(rows: list[dict[str, Any]], key: str) -> dict[str, Any]:
+        values = [float(row[key]) for row in rows if isinstance(row.get(key), (int, float))]
+        if not values:
+            return {"value": None, "sample_count": 0, "status": "unknown"}
+        return {"value": round(statistics.mean(values), 3), "variance": round(statistics.pvariance(values), 3),
+                "sample_count": len(values), "status": "measured"}
+    left_tokens = [_complete_usage_total(row) for row in left]
+    right_tokens = [_complete_usage_total(row) for row in right]
+    def average(values: list[int | None]) -> dict[str, Any]:
+        known = [value for value in values if value is not None]
+        return {"value": round(statistics.mean(known), 3), "variance": round(statistics.pvariance(known), 3),
+                "sample_count": len(known), "status": "measured"} if known else {"value": None, "sample_count": 0, "status": "unknown"}
+    def verified(row):
+        return _verification_passed(row.get("verification_runs") or [row.get("verification") or []]) and not row.get("verification_flaky")
+    def summary(rows):
+        return {
+            "verified_success_rate": round(sum(verified(row) for row in rows) / len(rows), 4),
+            "false_completion_trials": sum(row.get("agent_state") in {"completed", "completed_verified"} and not verified(row) for row in rows),
+            "unexpected_edit_trials": sum(bool(row.get("unexpected_changes")) for row in rows),
+        }
+    return {
+        "schema_version": 1,
+        "optimized": str(optimized_path),
+        "reference": str(reference_path),
+        "sample_counts": {"optimized": len(left), "reference": len(right)},
+        "pass_rate": {"optimized": optimized.get("aggregate", {}).get("pass_rate"), "reference": reference.get("aggregate", {}).get("pass_rate")},
+        "latency_seconds": {"optimized": metric(left, "latency_seconds"), "reference": metric(right, "latency_seconds")},
+        "total_tokens": {"optimized": average(left_tokens), "reference": average(right_tokens)},
+        "unknown_usage_trials": {"optimized": sum(value is None for value in left_tokens), "reference": sum(value is None for value in right_tokens)},
+        "outcomes": {"optimized": summary(left), "reference": summary(right)},
+        "quality_claim": "pass rates are reported; no quality improvement is claimed without comparable measured samples",
+    }
 
 
 def _verification_command(raw: Any) -> list[str]:
@@ -371,6 +432,34 @@ def _validate_benchmark_tree(workspace: Path) -> None:
     for candidate in workspace.rglob("*"):
         if candidate.is_symlink():
             candidate.resolve().relative_to(workspace.resolve())
+
+
+def _apply_case_setup(case: dict[str, Any], suite_path: Path, workspace: Path) -> None:
+    """Inject exact reproducible regressions and protected verification harnesses."""
+    def target(raw: str) -> Path:
+        relative = Path(raw)
+        if relative.is_absolute() or ".." in relative.parts or relative.parts[:1] in {(".git",), (".apsara",)}:
+            raise ValueError(f"Unsafe benchmark setup path: {raw}")
+        path = workspace / relative
+        path.resolve().relative_to(workspace.resolve())
+        if path.is_symlink():
+            raise ValueError("Benchmark setup cannot modify symlinks")
+        return path
+    for patch in case.get("regressions", []):
+        path = target(str(patch["path"]))
+        before, after = patch["before"], patch["after"]
+        content = path.read_text(encoding="utf-8")
+        if not isinstance(before, str) or not before or content.count(before) != 1 or not isinstance(after, str):
+            raise ValueError(f"Regression must match exactly once: {patch['path']}")
+        path.write_text(content.replace(before, after, 1), encoding="utf-8")
+    for destination, source in (case.get("support_files") or {}).items():
+        path = target(str(destination))
+        source_path = suite_path.parent / str(source)
+        source_path.resolve().relative_to(suite_path.parent.resolve())
+        if path.exists() or source_path.is_symlink() or not source_path.is_file():
+            raise ValueError("Support files must be regular files copied to new paths")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_path, path)
 
 
 def _materialize_benchmark_case(
@@ -544,6 +633,8 @@ async def run_benchmark_suite(
     *,
     repeats: int = 1,
     min_pass_rate: Any = None,
+    profile: str = "optimized",
+    compare: bool = False,
 ) -> tuple[list[BenchmarkResult], Path]:
     """Run live model benchmarks in disposable fixture copies and save evidence."""
     from apsara_cli.engine.executor import run_agent_stream
@@ -551,6 +642,8 @@ async def run_benchmark_suite(
 
     if not 1 <= repeats <= 10:
         raise ValueError("Benchmark repeats must be between 1 and 10")
+    if profile not in {"optimized", "reference"}:
+        raise ValueError("Benchmark profile must be optimized or reference")
     suite_path = suite_path.resolve()
     suite = json.loads(suite_path.read_text(encoding="utf-8"))
     run_label = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid4().hex[:6]
@@ -582,10 +675,14 @@ async def run_benchmark_suite(
         if not 0 < agent_timeout <= 3600:
             raise ValueError("agent_timeout must be greater than zero and at most 3600 seconds")
 
-        for trial in range(1, repeats + 1):
-            workspace = run_root / name / f"trial-{trial}"
+        profiles = ["optimized", "reference"] if compare else [profile]
+        schedule = [(trial, selected) for trial in range(1, repeats + 1)
+                    for selected in (profiles if trial % 2 else list(reversed(profiles)))]
+        for trial, profile in schedule:
+            workspace = run_root / profile / name / f"trial-{trial}" if compare else run_root / name / f"trial-{trial}"
             workspace.parent.mkdir(parents=True, exist_ok=True)
             _materialize_benchmark_case(case, suite_path, workspace)
+            _apply_case_setup(case, suite_path, workspace)
             baseline_runs = await _run_verification_repeated(
                 commands, workspace, verify_timeout, verification_repeats
             )
@@ -608,6 +705,9 @@ async def run_benchmark_suite(
                     "language": case.get("language"),
                     "trial": trial,
                     "agent_state": "skipped_invalid_baseline",
+                    "profile": profile,
+                    "usage_complete": False,
+                    "unexpected_changes": [],
                     "changed_files": [],
                     "tool_calls": 0,
                     "usage": normalize_usage({}),
@@ -639,11 +739,12 @@ async def run_benchmark_suite(
             events: list[dict[str, Any]] = []
             aggregate_usage: dict[str, Any] = {}
 
+            started = time.perf_counter()
             async def collect_agent_events() -> None:
-                async for raw_event in run_agent_stream(
-                    [{"role": "user", "content": str(case["instruction"])}],
-                    model=model,
-                ):
+                request = [{"role": "user", "content": str(case["instruction"])}]
+                stream = (run_agent_stream(request, model=model, profile=profile)
+                          if profile != "optimized" else run_agent_stream(request, model=model))
+                async for raw_event in stream:
                     event = json.loads(raw_event)
                     events.append(event)
                     if event.get("type") == "usage" and isinstance(event.get("data"), dict):
@@ -664,6 +765,7 @@ async def run_benchmark_suite(
                         "type": "error",
                         "message": f"Agent trial timed out after {agent_timeout:g} seconds.",
                     })
+            latency = time.perf_counter() - started
 
             verification_runs = await _run_verification_repeated(
                 commands, workspace, verify_timeout, verification_repeats
@@ -701,7 +803,18 @@ async def run_benchmark_suite(
                 "verification_flaky": baseline_flaky or final_flaky,
                 "event_count": len(events),
                 "agent_timeout_seconds": agent_timeout,
+                "profile": profile,
+                "latency_seconds": round(latency, 3),
+                "unexpected_changes": [],
+                "request_context": [event for event in events if event.get("type") == "request_context"],
+                "usage_complete": bool(aggregate_usage.get("total_tokens")) and not any(
+                    aggregate_usage.get(key) for key in ("unreported_calls", "interrupted_calls")
+                ) and aggregate_usage.get("provider_reported_calls", 0) >= (
+                    sum(event.get("type") == "request_context" for event in events)
+                    + aggregate_usage.get("auxiliary_calls", 0)
+                ),
             }
+            details["unexpected_changes"] = _unexpected_changes(case, details)
             evidence_cases.append(details)
             scored.append(score_benchmark_case(case, details))
             events_path = workspace / ".apsara" / "benchmark-events.json"
@@ -717,6 +830,7 @@ async def run_benchmark_suite(
     evidence = {
         "schema_version": 2,
         "suite": suite.get("name"),
+        "suite_digest": hashlib.sha256(suite_path.read_bytes()).hexdigest(),
         "model": model,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "repeat_count": repeats,
@@ -729,4 +843,19 @@ async def run_benchmark_suite(
     (run_root / "summary.json").write_text(
         json.dumps(aggregate, indent=2, ensure_ascii=False), encoding="utf-8"
     )
+    if compare:
+        paths = {}
+        for selected in ("optimized", "reference"):
+            selected_results = [result for result in scored if result.details.get("profile") == selected]
+            selected_aggregate = aggregate_benchmark_results(suite_path, selected_results, min_pass_rate=min_pass_rate)
+            directory = run_root / selected
+            directory.mkdir(parents=True, exist_ok=True)
+            paths[selected] = directory / "results.json"
+            paths[selected].write_text(json.dumps({**evidence, "profile": selected,
+                "cases": [result.details for result in selected_results], "aggregate": selected_aggregate,
+            }, indent=2, ensure_ascii=False), encoding="utf-8")
+            (directory / "summary.json").write_text(json.dumps(selected_aggregate, indent=2), encoding="utf-8")
+        comparison = compare_benchmark_results(paths["optimized"], paths["reference"])
+        (run_root / "comparison.json").write_text(json.dumps(comparison, indent=2), encoding="utf-8")
+        return [result for result in scored if result.details.get("profile") == "optimized"], paths["optimized"]
     return scored, results_path
