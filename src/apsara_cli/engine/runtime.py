@@ -115,6 +115,8 @@ class RunJournal:
         if state in {
             AgentRunState.BLOCKED,
             AgentRunState.COMPLETED,
+            AgentRunState.COMPLETED_VERIFIED,
+            AgentRunState.COMPLETED_UNVERIFIED,
             AgentRunState.FAILED,
             AgentRunState.CANCELLED,
         }:
@@ -123,6 +125,8 @@ class RunJournal:
         if state in {
             AgentRunState.BLOCKED,
             AgentRunState.COMPLETED,
+            AgentRunState.COMPLETED_VERIFIED,
+            AgentRunState.COMPLETED_UNVERIFIED,
             AgentRunState.FAILED,
             AgentRunState.CANCELLED,
         }:

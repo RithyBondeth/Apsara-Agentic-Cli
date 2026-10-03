@@ -57,6 +57,38 @@ A missing language runtime is recorded as `unavailable`, never mistaken for a
 passing verification. Use the JSON suite format to add larger repositories or
 provider-specific token and tool-call budgets.
 
+## Comparing context efficiency
+
+```bash
+apsara eval evals/pinned-repositories.json --live --compare --model opencode/big-pickle --repeat 3
+```
+
+The optimized profile starts with core tools and activates specialized schemas
+on demand. The reference exposes every enabled tool immediately. Both profiles
+retain the same skills, permissions, verification gates, output bounds, and
+compaction policy. This comparison isolates schema discovery; it does not
+recreate every behavior of an older release. Trials use independent fresh
+workspaces and alternate profile order on successive repetitions.
+
+Each profile gets `results.json` and `summary.json`; `comparison.json` reports
+sample counts, pass rates, independent verified success, false completion,
+unexpected edits, agent latency, and total provider tokens including critic
+calls. Raw events record schema count/bytes, estimated input, and active skills.
+Missing, interrupted, or partial provider usage is labeled unknown and excluded
+from token averages. It earns no token-budget score. Quality can still be scored
+from independent checks; unknown usage cannot support a savings claim. Repeated
+samples report variance. Small suites are evidence for these tasks and do not
+establish general coding ability.
+
+The pinned suite uses boltons and more-itertools at full commit SHAs and injects
+specific regressions before baseline checks. The latter spans two modules.
+Independent standard-library harnesses pass on the original revisions and fail
+after injection. These are repair tasks in real repositories, not upstream bug
+claims. Setup paths stay within the disposable workspace, regressions must match
+exactly once, and harness files are outside each case's allowed production edits.
+Baseline and final checks repeat independently. Changing tests, verification
+configuration, or unrelated source files fails constrained-edit scoring.
+
 Cases may use a local fixture or a pinned real repository. Remote sources must
 use HTTPS and a full 40-character commit SHA, so a benchmark cannot silently
 move when a branch or tag changes:

@@ -20,6 +20,7 @@ MAX_ACTIVE_SKILL_CHARS = 24_000
 class CapabilityState:
     tools: set[str] = field(default_factory=set)
     skills: dict[str, str] = field(default_factory=dict)
+    eager: bool = False
 
 
 _state: ContextVar[CapabilityState | None] = ContextVar("apsara_capabilities", default=None)
@@ -30,8 +31,12 @@ def current_capabilities() -> CapabilityState | None:
 
 
 @contextmanager
-def capability_context() -> Iterator[CapabilityState]:
-    state = CapabilityState()
+def capability_context(*, eager: bool = False) -> Iterator[CapabilityState]:
+    state = CapabilityState(eager=eager)
+    if eager:
+        # Reference profile for benchmarks: expose the complete built-in set.
+        from apsara_cli.engine.tools import get_agent_tools
+        state.tools.update(tool["function"]["name"] for tool in get_agent_tools())
     token = _state.set(state)
     try:
         yield state

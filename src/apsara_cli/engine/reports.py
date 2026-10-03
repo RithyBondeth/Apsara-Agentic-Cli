@@ -17,6 +17,15 @@ def render_run_report(run: dict[str, Any]) -> str:
         lines.extend(["", "## Verification", "", *[f"- `{v}`" for v in run["verification"]]])
     if run.get("error"):
         lines.extend(["", "## Error", "", str(run["error"])])
+    lines.extend(["", "## Completion evidence", "",
+                  f"- Verification: {run.get('verification_status', 'unknown')}",
+                  f"- Critic: {run.get('critic_status', 'unknown')}",
+                  f"- Outcome: {run.get('completion_reason') or 'No completion reason recorded.'}"])
+    for evidence in run.get("verification_evidence", []):
+        for result in evidence.get("results", []):
+            lines.append(f"- `{result.get('command', [])}` — {result.get('status')}, exit {result.get('returncode')}")
+    for finding in run.get("critic_findings", []):
+        lines.append(f"- Finding: {finding.get('path', '')} — {finding.get('description', '')}")
     return "\n".join(lines) + "\n"
 
 

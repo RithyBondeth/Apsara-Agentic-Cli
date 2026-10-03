@@ -159,6 +159,13 @@ def test_extract_simple():
     assert _extract_command_names("ls -la") == ["ls"]
 
 
+def test_extract_quoted_arguments_and_chains():
+    assert _extract_command_names("'/project with spaces/python' -c 'import time; time.sleep(1)'") == ['/project with spaces/python']
+    assert _extract_command_names('echo "literal ; | &&" && rm file') == ['echo', 'rm']
+    assert _extract_command_names(r'echo literal\;word | grep word') == ['echo', 'grep']
+    assert _extract_command_names('python -m pip --version && echo done') == ['python', 'pip', 'echo']
+
+
 def test_extract_pipe():
     assert _extract_command_names("cat file | grep foo") == ["cat", "grep"]
 

@@ -545,12 +545,18 @@ def handle_chat_command(
 
     if command_text == "/undo-turn" or command_text.startswith("/undo-turn "):
         from apsara_cli.engine.tools import undo_turn_checkpoint
-        turn_id = command_text[len("/undo-turn"):].strip()
-        if not ui.confirm_action("undo_turn", {"turn_id": turn_id or "latest"}):
+        parts = command_text[len("/undo-turn"):].split()
+        force = "--force" in parts
+        identifiers = [part for part in parts if part != "--force"]
+        if len(identifiers) > 1:
+            ui.error("Usage: /undo-turn [id] [--force]")
+            return True, current_model
+        turn_id = identifiers[0] if identifiers else ""
+        if not ui.confirm_action("undo_turn", {"turn_id": turn_id or "latest", "force": force}):
             ui.info("Turn rollback cancelled.")
             return True, current_model
         with agent_runtime_context(workspace_root=options.workspace_root, read_only=options.read_only):
-            result = undo_turn_checkpoint(turn_id)
+            result = undo_turn_checkpoint(turn_id, force=force)
         (ui.error if result.startswith("Error:") else ui.success)(result)
         return True, current_model
 
@@ -1219,6 +1225,8 @@ async def execute_instruction(
             if aggregate_usage:
                 ui.usage(aggregate_usage)
             ui.record_interrupted_usage(trim_result.trimmed_tokens, model)
+            from apsara_cli.cli.history import recover_interrupted_history
+            history[:] = recover_interrupted_history(next_history)
             save_if_needed(history, model, options, ui)
             raise
 
@@ -1290,6 +1298,8 @@ async def run_once(args: object, config: object) -> int:
 
     if not options.stateless:
         history = load_session_messages(options.workspace_root, options.session)
+        from apsara_cli.cli.history import recover_interrupted_history
+        history = recover_interrupted_history(history)
         ui.restore_usage(load_session_usage(options.workspace_root, options.session))
 
     async with mcp_session(config, options, ui):
@@ -1305,7 +1315,8 @@ async def run_once(args: object, config: object) -> int:
         ui.usage(latest_usage)
     save_if_needed(updated_history, options.model, options, ui)
 
-    return 0
+    state = getattr(ui, "last_run_state", "completed")
+    return 0 if state in {"completed", "completed_verified"} else 2 if state == "completed_unverified" else 1
 
 
 async def chat_loop(args: object, config: object) -> int:
@@ -1329,6 +1340,8 @@ async def chat_loop(args: object, config: object) -> int:
 
     if not options.stateless:
         history = load_session_messages(options.workspace_root, options.session)
+        from apsara_cli.cli.history import recover_interrupted_history
+        history = recover_interrupted_history(history)
         ui.restore_usage(load_session_usage(options.workspace_root, options.session))
 
     print_welcome_banner(ui, config)

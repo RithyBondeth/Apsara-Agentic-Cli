@@ -130,10 +130,7 @@ def capture_turn_workspace(workspace: Path) -> None:
     manifest = _read_manifest(workspace, turn_id)
     if manifest.get("workspace_baseline") is not None:
         return
-    ignored = {
-        ".git", ".apsara", ".apsara-cli", ".venv", "node_modules", "target",
-        "dist", "build", "__pycache__", ".pytest_cache",
-    }
+    from apsara_cli.engine.workspace_state import ignored_directory
     paths: list[Path] = []
     baseline_files: list[str] = []
     baseline_directories: list[str] = []
@@ -146,8 +143,10 @@ def capture_turn_workspace(workspace: Path) -> None:
     partial = False
     for root, directories, files in os.walk(workspace):
         root_path = Path(root)
-        directories[:] = [name for name in directories if name not in ignored]
+        directories[:] = [name for name in directories if not ignored_directory(name)]
         for directory in directories:
+            if (root_path / directory).is_symlink():
+                partial = True
             baseline_directories.append(str((root_path / directory).relative_to(workspace)))
         for filename in files:
             path = root_path / filename
@@ -182,10 +181,10 @@ def _capture_command_creations(workspace: Path, manifest: dict[str, Any]) -> Non
     known = {str(item.get("path")) for item in manifest.get("files", [])}
     baseline_files = set(baseline.get("files") or [])
     baseline_directories = set(baseline.get("directories") or [])
-    ignored = {".git", ".apsara", ".apsara-cli", ".venv", "node_modules", "target", "dist", "build", "__pycache__", ".pytest_cache"}
+    from apsara_cli.engine.workspace_state import ignored_directory
     for root, directories, files in os.walk(workspace):
         root_path = Path(root)
-        directories[:] = [name for name in directories if name not in ignored]
+        directories[:] = [name for name in directories if not ignored_directory(name)]
         for filename in files:
             relative = str((root_path / filename).relative_to(workspace))
             if relative not in baseline_files and relative not in known:
@@ -234,6 +233,9 @@ def finish_turn_checkpoint(workspace: Path, turn_id: str, status: str) -> dict[s
     _capture_command_creations(workspace.resolve(), manifest)
     manifest["status"] = status
     manifest["changes"] = _changes(workspace.resolve(), manifest)
+    from apsara_cli.engine.workspace_state import path_state
+    for entry in manifest.get("files", []):
+        entry["after"] = path_state(_target(workspace.resolve(), str(entry["path"])))
     manifest["updated_at"] = datetime.now(timezone.utc).isoformat()
     _write_manifest(workspace, turn_id, manifest)
     return manifest
@@ -258,7 +260,7 @@ def list_turn_checkpoints(workspace: Path) -> list[dict[str, Any]]:
     )
 
 
-def restore_turn_checkpoint(workspace: Path, turn_id: str | None = None) -> dict[str, Any]:
+def restore_turn_checkpoint(workspace: Path, turn_id: str | None = None, *, force: bool = False) -> dict[str, Any]:
     workspace = workspace.resolve()
     turns = list_turn_checkpoints(workspace)
     manifest = next((
@@ -268,7 +270,7 @@ def restore_turn_checkpoint(workspace: Path, turn_id: str | None = None) -> dict
     if manifest is None:
         raise FileNotFoundError("No matching turn checkpoint exists")
     selected_id = str(manifest["id"])
-    _capture_command_creations(workspace, manifest)
+    # New paths observed only now may belong to the user, not the interrupted turn.
     snapshots = _root(workspace, selected_id) / "files"
     restored: list[str] = []
     removed: list[str] = []
@@ -287,6 +289,14 @@ def restore_turn_checkpoint(workspace: Path, turn_id: str | None = None) -> dict
         relative = str(entry.get("path") or "")
         target = _target(workspace, relative)
         before = entry.get("before")
+        from apsara_cli.engine.workspace_state import path_state
+        current = path_state(target)
+        original = {"kind": before, "digest": entry.get("sha256")}
+        if current == original:
+            continue
+        if not force and (entry.get("after") is None or current != entry["after"]):
+            conflicts.append(relative)
+            continue
         if before == "file":
             if target.is_symlink():
                 target.unlink()
@@ -321,12 +331,13 @@ def restore_turn_checkpoint(workspace: Path, turn_id: str | None = None) -> dict
             elif not target.exists():
                 target.mkdir(parents=True, exist_ok=True)
                 restored.append(relative)
-    manifest["status"] = "rolled_back"
+    manifest["status"] = "rollback_conflicts" if conflicts else "rolled_back"
     manifest["rollback"] = {
         "at": datetime.now(timezone.utc).isoformat(),
         "restored": restored,
         "removed": removed,
         "conflicts": conflicts,
+        "forced": force,
     }
     manifest["changes"] = _changes(workspace, manifest)
     manifest["updated_at"] = datetime.now(timezone.utc).isoformat()

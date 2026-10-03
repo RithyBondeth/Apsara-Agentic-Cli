@@ -1,0 +1,61 @@
+{
+  "kind": "coding-benchmark",
+  "schema_version": 2,
+  "name": "apsara-pinned-repository-regressions",
+  "description": "Injected regressions in pinned real repositories. Measures repair and independent verification, not resolution of upstream issues.",
+  "agent_timeout": 600,
+  "verification_repeats": 2,
+  "thresholds": {
+    "min_pass_rate": 1.0,
+    "max_verification_flaky_trials": 0,
+    "max_unstable_cases": 0,
+    "max_unsafe_trials": 0
+  },
+  "cases": [
+    {
+      "name": "boltons-chunk-contract",
+      "language": "python",
+      "repository": {
+        "url": "https://github.com/mahmoud/boltons.git",
+        "ref": "4e5faa3d7e4008d89e0d8bf1ea87b6d9a061a16d"
+      },
+      "regressions": [{
+        "path": "boltons/iterutils.py",
+        "before": "        cur_chunk = list(itertools.islice(src_iter, size))\n",
+        "after": "        cur_chunk = list(itertools.islice(src_iter, size + 1))\n"
+      }],
+      "support_files": {"test_apsara_contract.py": "harnesses/boltons_chunks.py"},
+      "instruction": "Repair the chunked and chunked_iter contract regression in boltons/iterutils.py. Keep chunk size, count, fill behavior, string and bytes support, generator consumption, and invalid-size handling intact. Run python3 -m unittest -q test_apsara_contract. Do not edit any tests or verification configuration.",
+      "verify": [["python3", "-m", "unittest", "-q", "test_apsara_contract"]],
+      "allowed_changes": ["boltons/iterutils.py"],
+      "max_tool_calls": 18,
+      "max_tokens": 75000
+    },
+    {
+      "name": "more-itertools-shared-chunk-contract",
+      "language": "python",
+      "repository": {
+        "url": "https://github.com/more-itertools/more-itertools.git",
+        "ref": "1ea82a711c69f590054987b5cb194157f8ce8ac4"
+      },
+      "regressions": [
+        {
+          "path": "more_itertools/recipes.py",
+          "before": "    return list(islice(iterable, n))\n\n\ndef tabulate(",
+          "after": "    return list(islice(iterable, max(0, n - 1) if n is not None else None))\n\ndef tabulate("
+        },
+        {
+          "path": "more_itertools/more.py",
+          "before": "                if len(chunk) != n:\n                    raise ValueError('iterable is not divisible by n.')",
+          "after": "                if len(chunk) > n:\n                    raise ValueError('iterable is not divisible by n.')"
+        }
+      ],
+      "support_files": {"test_apsara_contract.py": "harnesses/more_itertools_chunks.py"},
+      "instruction": "Repair the shared take/chunked regressions in more_itertools/recipes.py and more_itertools/more.py. Keep each function's responsibility: take must consume exactly the requested number and chunked must reject trailing partial chunks in strict mode. Preserve zero, None, generator, and negative-size behavior. Run python3 -m unittest -q test_apsara_contract. Do not edit any tests or verification configuration.",
+      "verify": [["python3", "-m", "unittest", "-q", "test_apsara_contract"]],
+      "allowed_changes": ["more_itertools/recipes.py", "more_itertools/more.py"],
+      "max_tool_calls": 24,
+      "max_tokens": 100000
+    }
+  ]
+}
