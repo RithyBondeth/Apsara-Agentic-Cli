@@ -7,7 +7,7 @@ import asyncio
 from typing import Any, AsyncGenerator
 import litellm
 from apsara_cli.engine.models import DEFAULT_MODEL, resolve_litellm_request
-from apsara_cli.engine.tools import get_agent_tools
+from apsara_cli.engine.tools import get_request_tools
 
 import os as _os
 # Silence huggingface_hub's unauthenticated-request warning triggered by
@@ -76,13 +76,13 @@ def estimate_request_tokens(messages: list[dict], model: str = DEFAULT_MODEL) ->
         return litellm.token_counter(
             model=resolved_model,
             messages=messages,
-            tools=get_agent_tools(),
+            tools=get_request_tools(),
             tool_choice="auto",
         )
     except Exception:
         return max(
             1,
-            sum(len(str(message.get("content", ""))) for message in messages) // 4,
+            len(json.dumps({"messages": messages, "tools": get_request_tools()}, ensure_ascii=False, default=str)) // 3,
         )
 
 
@@ -172,7 +172,7 @@ async def call_llm(
         resolved_model, provider_options = resolve_litellm_request(model)
         request_options: dict[str, Any] = {}
         if with_tools:
-            request_options.update(tools=get_agent_tools(), tool_choice="auto")
+            request_options.update(tools=get_request_tools(), tool_choice="auto")
         response = await asyncio.wait_for(
             litellm.acompletion(
                 model=resolved_model,
@@ -214,7 +214,7 @@ async def call_llm_stream(
             response = await litellm.acompletion(
                 model=resolved_model,
                 messages=messages,
-                tools=get_agent_tools(),
+                tools=get_request_tools(),
                 tool_choice="auto",
                 max_tokens=DEFAULT_MAX_COMPLETION_TOKENS,
                 stream=True,

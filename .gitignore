@@ -50,3 +50,4 @@ venv.bak/
 .apsara/benchmarks/
 .apsara/reports/
 .apsara/bugs/
+.apsara/tool-results/

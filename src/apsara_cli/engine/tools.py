@@ -1,4 +1,5 @@
 import difflib
+import json
 import importlib.util
 import glob as _glob
 import os
@@ -1608,6 +1609,92 @@ def _tool_definition(
     return definition
 
 
+def get_request_tools() -> list[Dict[str, Any]]:
+    """Only core and explicitly discovered schemas enter the model request."""
+    from apsara_cli.engine.capabilities import CORE_TOOLS, current_capabilities
+    state = current_capabilities()
+    names = CORE_TOOLS | (state.tools if state is not None else set())
+    return [tool for tool in get_agent_tools() if tool["function"]["name"] in names]
+
+
+def discover_tools(query: str, limit: int = 5) -> str:
+    """Search descriptions and activate a bounded set for subsequent requests."""
+    from apsara_cli.engine.capabilities import CORE_TOOLS, MAX_ACTIVE_TOOLS, current_capabilities
+    if not query.strip() or not 1 <= limit <= 8:
+        return "Error: Supply a non-empty query and a limit between 1 and 8."
+    terms = query.lower().replace("_", " ").split()
+    ranked = []
+    for tool in get_agent_tools():
+        function = tool["function"]
+        name = function["name"]
+        description = function.get("description", "")
+        haystack = (name.replace("_", " ") + " " + description).lower()
+        score = sum(term in haystack for term in terms)
+        if name.lower() == query.strip().lower():
+            score += len(terms) + 10
+        if score:
+            ranked.append((score, name, description))
+    ranked.sort(key=lambda item: (-item[0], item[1]))
+    state = current_capabilities()
+    if state is None:
+        return "Error: Tool activation requires an active agent turn."
+    results = []
+    for _, name, description in ranked[:limit]:
+        if name not in CORE_TOOLS and name not in state.tools and len(state.tools) >= MAX_ACTIVE_TOOLS:
+            continue
+        if name not in CORE_TOOLS:
+            state.tools.add(name)
+        results.append({"name": name, "description": description[:240], "active": True})
+    return json.dumps({"tools": results, "message": "Matched tools are now available. Existing permissions still apply." if results else "No tools matched or the activation limit was reached."})
+
+
+def list_skills(query: str = "") -> str:
+    from apsara_cli.engine.skills import discover_skills
+    skills = discover_skills(_workspace_root())
+    terms = query.lower().split()
+    return json.dumps({"skills": [skill.metadata() for skill in skills
+                                 if all(term in (skill.name + " " + skill.description).lower() for term in terms)]})
+
+
+def read_skill(name: str) -> str:
+    from apsara_cli.engine.capabilities import MAX_ACTIVE_SKILL_CHARS, current_capabilities
+    from apsara_cli.engine.skills import discover_skills, read_skill_file
+    skill = next((item for item in discover_skills(_workspace_root()) if item.name == name), None)
+    if skill is None:
+        return f"Error: Skill '{name}' was not found. Use list_skills."
+    try:
+        content = read_skill_file(skill)
+    except (OSError, ValueError, UnicodeError) as exc:
+        return f"Error reading skill: {exc}"
+    state = current_capabilities()
+    if state is None:
+        return "Error: Loading a skill requires an active agent turn."
+    used = sum(len(text) for key, text in state.skills.items() if key != name)
+    if used + len(content) > MAX_ACTIVE_SKILL_CHARS:
+        return "Error: Active skill instructions exceed the per-turn limit. Use fewer or shorter skills."
+    state.skills[name] = content
+    return f"Loaded skill '{name}' ({skill.source}): {skill.description}. Full instructions are attached to subsequent requests for this turn."
+
+
+def read_skill_resource(name: str, path: str) -> str:
+    from apsara_cli.engine.skills import discover_skills, read_skill_file
+    skill = next((item for item in discover_skills(_workspace_root()) if item.name == name), None)
+    if skill is None:
+        return f"Error: Skill '{name}' was not found."
+    try:
+        return read_skill_file(skill, path)
+    except (OSError, ValueError, UnicodeError) as exc:
+        return f"Error reading skill resource: {exc}"
+
+
+def read_tool_result(identifier: str, start_line: int = 1, line_count: int = 80, char_offset: int | None = None) -> str:
+    from apsara_cli.engine.context import read_result
+    try:
+        return read_result(_workspace_root(), identifier, start_line, line_count, char_offset=char_offset)
+    except (OSError, ValueError, UnicodeError) as exc:
+        return f"Error reading tool result: {exc}"
+
+
 def get_agent_tools() -> list[Dict[str, Any]]:
     tools = [
         _tool_definition(
@@ -1955,6 +2042,20 @@ def get_agent_tools() -> list[Dict[str, Any]]:
         ),
     ]
 
+    tools.extend([
+        _tool_definition("discover_tools", "Find and activate specialized built-in, plugin, or MCP tools by name, server, or task description. Search before using a tool absent from your current schemas.", {
+            "query": {"type": "string"}, "limit": {"type": "integer", "minimum": 1, "maximum": 8},
+        }, ["query"]),
+        _tool_definition("list_skills", "List short metadata for bundled, user, and project skills. Full instructions are loaded only when needed.", {"query": {"type": "string"}}),
+        _tool_definition("read_skill", "Load a named skill's instructions for this turn. Skills do not grant permission to execute commands or external actions.", {"name": {"type": "string"}}, ["name"]),
+        _tool_definition("read_skill_resource", "Read a referenced file relative to a named skill directory. Scripts are read as text, never executed by this tool.", {"name": {"type": "string"}, "path": {"type": "string"}}, ["name", "path"]),
+        _tool_definition("read_tool_result", "Retrieve a bounded line range from a full tool result saved locally when output was shortened.", {
+            "identifier": {"type": "string"}, "start_line": {"type": "integer", "minimum": 1},
+            "line_count": {"type": "integer", "minimum": 1, "maximum": 200},
+            "char_offset": {"type": "integer", "minimum": 0, "description": "Use character pagination for a long single-line result; overrides line selection."},
+        }, ["identifier"]),
+    ])
+
     # Load local workspace plugins
     local_plugins = _load_local_plugins()
     for tool_def, _ in local_plugins:
@@ -1990,6 +2091,11 @@ def get_agent_tools() -> list[Dict[str, Any]]:
 
 def get_tool_registry() -> Dict[str, Callable[..., str]]:
     registry: Dict[str, Callable[..., str]] = {
+        "discover_tools": discover_tools,
+        "list_skills": list_skills,
+        "read_skill": read_skill,
+        "read_skill_resource": read_skill_resource,
+        "read_tool_result": read_tool_result,
         "read_file": read_file,
         "read_file_lines": read_file_lines,
         "parallel_read_files": parallel_read_files,
