@@ -84,7 +84,7 @@ async def init_workspace(args: argparse.Namespace, config: object) -> int:
     ignore_lines = [
         ".apsara/logs/", ".apsara/bugs/", ".apsara/runs/",
         ".apsara/checkpoints/", ".apsara/turns/", ".apsara/benchmarks/",
-        ".apsara/reports/", ".apsara-cli/",
+        ".apsara/reports/", ".apsara/tool-results/", ".apsara-cli/",
     ]
     if gitignore.exists():
         content = gitignore.read_text(encoding="utf-8")

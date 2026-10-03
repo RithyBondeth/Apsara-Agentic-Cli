@@ -434,6 +434,7 @@ _HELP_SECTIONS: list[tuple[str, list[tuple[str, str, str]]]] = [
     ]),
     ("Diagnostics", [
         ("/tools", "", "Show enabled tools with descriptions"),
+        ("/skills", "[name]", "List skills or preview a skill without a model call"),
         ("/bug", "[--include-content]", "Save a privacy-safe diagnostic bundle"),
         ("/exit", "", "Quit the chat session"),
     ]),
@@ -492,6 +493,25 @@ def handle_chat_command(
 
     if command_text == "/details":
         ui.show_hidden_events()
+        return True, current_model
+
+    if command_text == "/skills" or command_text.startswith("/skills "):
+        from apsara_cli.engine.skills import discover_skills, read_skill_file
+        name = command_text[len("/skills"):].strip()
+        skills = discover_skills(options.workspace_root)
+        if not name:
+            ui.info("Available skills — ask Apsara to use a named skill for your task.")
+            ui.print_block("\n".join(f"{skill.name} [{skill.source}] — {skill.description}" for skill in skills)
+                           or "No skills found.")
+        else:
+            skill = next((item for item in skills if item.name == name), None)
+            if skill is None:
+                ui.error(f"Skill '{name}' was not found. Use /skills to list available names.")
+            else:
+                try:
+                    ui.print_block(read_skill_file(skill))
+                except (OSError, ValueError, UnicodeError) as exc:
+                    ui.error(f"Cannot read skill: {exc}")
         return True, current_model
 
     if command_text == "/diff":

@@ -221,6 +221,21 @@ Check your setup any time:
 apsara mcp
 ```
 
+## Skills and efficient context
+
+Built-in `debug`, `test`, and `review` skills provide focused coding workflows.
+Use `/skills` to list them or `/skills debug` to preview one, then ask the agent
+to use the relevant skill. Add project skills under
+`.apsara/skills/<name>/SKILL.md` or personal skills under
+`~/.apsara/skills/<name>/SKILL.md`. Only selected instructions enter model context.
+
+Model requests start with a compact core toolset; `discover_tools` activates
+specialized tools and MCP schemas as needed. Large results are saved locally
+with bounded excerpts and retrievable sections. Context budgets are checked
+throughout the turn, including tools and active skills. Existing approvals
+remain in force. See [skills and context management](https://github.com/RithyBondeth/Apsara-Agentic-Cli/blob/main/docs/SKILLS_AND_CONTEXT.md)
+for format, limits, storage, and compaction behavior.
+
 ## Lifecycle hooks
 
 Trusted hooks can enforce repository policy at `session_start`, `before_tool`,

@@ -55,6 +55,9 @@ apsara = "apsara_cli.cli:main"
 where = ["src"]
 include = ["apsara_cli*"]
 
+[tool.setuptools.package-data]
+"apsara_cli.engine" = ["bundled_skills/*/SKILL.md"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"

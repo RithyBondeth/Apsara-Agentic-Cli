@@ -203,7 +203,8 @@ def test_answer_card_timestamp_is_compact_and_faint():
     assert "\033[2;" in footer
 
 
-def test_big_pickle_usage_is_zero_cost_not_an_estimate(capsys):
+def test_big_pickle_usage_is_zero_cost_not_an_estimate(capsys, monkeypatch):
+    monkeypatch.setattr("apsara_cli.engine.pricing._promotion_is_current", lambda _verified: True)
     ui = ConsoleUI(use_color=False, typing_delay=0)
     ui.usage({
         "prompt_tokens": 800,
@@ -231,7 +232,8 @@ def test_unknown_model_usage_is_provider_billed_not_guessed(capsys):
     assert capsys.readouterr().out == ""
 
 
-def test_aggregated_usage_costs_each_model_without_double_counting(capsys):
+def test_aggregated_usage_costs_each_model_without_double_counting(capsys, monkeypatch):
+    monkeypatch.setattr("apsara_cli.engine.pricing._promotion_is_current", lambda _verified: True)
     ui = ConsoleUI(use_color=False, typing_delay=0)
     ui.usage({
         "prompt_tokens": 150,

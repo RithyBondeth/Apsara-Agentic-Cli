@@ -18,7 +18,7 @@ _KEY_PROVIDERS = ["openai", "anthropic", "groq", "google", "mistral", "deepseek"
 _ALL_PROVIDERS = _KEY_PROVIDERS + ["ollama"]
 
 _TOP_LEVEL = [
-    "/help", "/details", "/clear", "/history", "/tools", "/add", "/bug",
+    "/help", "/details", "/clear", "/history", "/tools", "/skills", "/add", "/bug",
     "/status", "/model", "/models", "/key", "/session", "/save",
     "/sessions", "/usage", "/diff", "/turns", "/undo-turn", "/checkpoints", "/undo", "/processes", "/logs", "/stop",
     "/report", "/memory", "/exit", "/quit",

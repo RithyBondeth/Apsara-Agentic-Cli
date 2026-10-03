@@ -146,6 +146,17 @@ def test_diff_and_usage_commands_render_local_reports(key_env):
     assert "no usage data is uploaded" in usage_ui.text
 
 
+def test_skills_command_lists_and_previews_without_a_provider_call(key_env):
+    with patch("apsara_cli.engine.llm.call_llm") as provider:
+        keep, _model, ui = _run_cmd("/skills", key_env)
+        assert keep is True and "debug [bundled]" in ui.text
+        keep, _model, ui = _run_cmd("/skills debug", key_env)
+        assert keep is True and "# Debugging workflow" in ui.text
+        keep, _model, ui = _run_cmd("/skills missing", key_env)
+        assert keep is True and "was not found" in ui.text
+    provider.assert_not_called()
+
+
 def test_paid_model_switch_requires_explicit_confirmation(key_env, monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     ui = _ChoiceUI("n")
