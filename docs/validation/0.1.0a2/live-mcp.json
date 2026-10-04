@@ -1,0 +1,23 @@
+{
+  "recorded_at": "2026-10-04T13:20:34.907122+00:00",
+  "model": "opencode/space-bunny-free",
+  "paid_fallbacks": false,
+  "source_digest": "e693a6573a66f8a21f5e360e42ac74be5755718174bc598541a2024161927e80",
+  "passed": true,
+  "scope": "Local read-only stdio MCP discovery and nonce round-trip; no remote server certification",
+  "tools_called": [
+    "discover_tools",
+    "mcp__validation__get_validation_nonce"
+  ],
+  "budget": {
+    "step_limit": 10,
+    "tool_call_limit": 50,
+    "usage_limit": 100000,
+    "steps_used": 3,
+    "tool_calls_used": 2,
+    "reported_usage": 9052,
+    "estimated_usage": 0,
+    "usage_complete": true,
+    "reused_checks": 0
+  }
+}

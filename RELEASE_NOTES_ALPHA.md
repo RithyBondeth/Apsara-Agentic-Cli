@@ -25,7 +25,8 @@ Status: prepared locally; no release tag, GitHub release, or PyPI publication.
 - Single fenced JSON critic verdicts are accepted; material findings still
   require changes and missing review still blocks verified completion. Final
   reviews receive the actual objective and current verification evidence;
-  agent-suggested extra cases cannot expand the requested task.
+  agent-suggested extra cases are not accepted as additional requirements.
+  Model review may still make scope or correctness errors.
 
 ## Validation
 
@@ -33,6 +34,12 @@ Current live and artifact evidence is documented in
 `docs/COMPLETION_VALIDATION_2026-10-04.md`. Only OpenCode's free model is included
 in live provider testing. Other provider adapters have offline coverage and
 remain uncertified for live coding; see `docs/PROVIDER_VALIDATION.md`.
+
+529 local tests and all 18 runtime CI jobs passed. Final free-model trials
+passed 12/15 core tasks, 2/6 optimized pinned-repository tasks, and
+1/6 reference tasks. Repeated completion remains unstable, so production
+quality gates are not met. Live saved-session recovery, undo, and a local
+read-only MCP round-trip passed; these are limited integration samples.
 
 ## Install the candidate
 

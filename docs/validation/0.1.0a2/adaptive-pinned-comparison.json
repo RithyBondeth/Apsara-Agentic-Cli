@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "sample_counts": {
+    "optimized": 6,
+    "reference": 6
+  },
+  "pass_rate": {
+    "optimized": 0.3333,
+    "reference": 0.1667
+  },
+  "latency_seconds": {
+    "optimized": {
+      "value": 75.492,
+      "variance": 223.719,
+      "sample_count": 6,
+      "status": "measured"
+    },
+    "reference": {
+      "value": 70.789,
+      "variance": 490.155,
+      "sample_count": 6,
+      "status": "measured"
+    }
+  },
+  "total_tokens": {
+    "optimized": {
+      "value": 81734.167,
+      "variance": 209718197.139,
+      "sample_count": 6,
+      "status": "measured"
+    },
+    "reference": {
+      "value": 94081.333,
+      "variance": 10129873.222,
+      "sample_count": 6,
+      "status": "measured"
+    }
+  },
+  "unknown_usage_trials": {
+    "optimized": 0,
+    "reference": 0
+  },
+  "outcomes": {
+    "optimized": {
+      "verified_success_rate": 0.6667,
+      "false_completion_trials": 0,
+      "unexpected_edit_trials": 0
+    },
+    "reference": {
+      "verified_success_rate": 0.5,
+      "false_completion_trials": 0,
+      "unexpected_edit_trials": 0
+    }
+  },
+  "quality_claim": "pass rates are reported; no quality improvement is claimed without comparable measured samples"
+}
