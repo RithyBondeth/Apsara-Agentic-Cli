@@ -3,7 +3,7 @@ from io import StringIO
 import pytest
 
 from prompt_toolkit.application import Application, create_app_session
-from prompt_toolkit.data_structures import Size
+from prompt_toolkit.data_structures import Point, Size
 from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output.vt100 import Vt100_Output
 from prompt_toolkit.output import DummyOutput
@@ -12,6 +12,22 @@ from prompt_toolkit.utils import get_cwidth
 from apsara_cli.cli import tui
 from apsara_cli.cli.parser import build_parser
 from apsara_cli.config.cli_config import load_cli_config
+
+
+@pytest.mark.parametrize("lines,cursor_row", [(2, 79), (1, 40)])
+def test_scroll_cursor_stays_inside_captured_text_snapshot(lines, cursor_row):
+    # Output grows between fragment capture and the cursor callback, or the
+    # sidebar shrinks while retaining an older mouse-scroll position.
+    control = tui._ScrollTextControl(
+        "\n".join(f"line {i}" for i in range(lines)),
+        get_cursor_position=lambda: Point(x=0, y=cursor_row),
+    )
+    content = control.create_content(80, 24)
+    from prompt_toolkit.layout import Window
+    window = Window(content=control, wrap_lines=True)
+    window._scroll(content, 80, 24)
+    assert content.cursor_position.y == lines - 1
+    assert content.get_line(content.cursor_position.y)
 
 
 class _BackgroundOutput(DummyOutput):

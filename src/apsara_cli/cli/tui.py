@@ -391,6 +391,20 @@ class TuiConsoleUI(ConsoleUI):
             self._invalidate()
 
 
+class _ScrollTextControl(FormattedTextControl):
+    """Keep scrolling within the text snapshot captured for this render."""
+
+    def create_content(self, width, height):
+        content = super().create_content(width, height)
+        # Worker output can change after fragments are captured but before the
+        # cursor callback runs. Never index the snapshot with a newer position.
+        cursor = content.cursor_position
+        content.cursor_position = Point(
+            x=cursor.x, y=max(0, min(cursor.y, content.line_count - 1))
+        )
+        return content
+
+
 class _PlaceholderProcessor(Processor):
     """OpenCode-style dim hint text shown inside the input box while empty."""
 
@@ -853,7 +867,7 @@ async def tui_loop(args: object, config: object) -> int:
             return Point(x=0, y=max(total - 1, 0))
         return Point(x=0, y=max(chat_window.vertical_scroll, 0))
 
-    chat_control = FormattedTextControl(
+    chat_control = _ScrollTextControl(
         lambda: _chat_text(ui), focusable=False, get_cursor_position=_chat_cursor_position
     )
     chat_window = Window(content=chat_control, wrap_lines=True, always_hide_cursor=True)
@@ -863,7 +877,7 @@ async def tui_loop(args: object, config: object) -> int:
         # its logical cursor at row zero on the next render.
         return Point(x=0, y=max(sidebar_window.vertical_scroll, 0))
 
-    sidebar_control = FormattedTextControl(
+    sidebar_control = _ScrollTextControl(
         lambda: _sidebar_text(ui, options, state["model"], session_label, history, session_started),
         focusable=False,
         get_cursor_position=_sidebar_cursor_position,
