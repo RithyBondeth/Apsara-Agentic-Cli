@@ -123,3 +123,22 @@ limits, and verification/review state. Once the required evidence is current,
 the runtime prompts the agent to finish if all requested work is satisfied.
 It does not infer that passing tests alone completes the user's objective.
 Later changes still require fresh checks and any applicable critic approval.
+
+## Turn headroom and review scope
+
+The runtime uses a soft input target of one third of the remaining turn allowance
+after the primary output reserve, with an 8,192-token minimum, bounded by the
+model's input limit. Older exchanges are compacted before they consume space
+needed for checking and finishing. If protected instructions, active skills, the
+current request, or latest exchange exceed that target, the runtime tries the
+model's normal input limit. It still enforces the remaining turn allowance before
+sending anything. This target is a compaction heuristic, not a guarantee that
+three more calls will fit or a fixed cap on required context.
+
+Verification freshness includes this workspace's approvals, not approvals for
+unrelated projects. Revoking or changing this project's records still invalidates
+evidence. A final critic receives the original objective, actual changed paths,
+and current structured verification evidence. The runtime replaces agent-supplied
+final-review hints with a request to assess concrete regressions and unmet user
+requirements; hints cannot add new task requirements. Passing checks do not force
+approval or override material findings. Model reviewers can still make mistakes.

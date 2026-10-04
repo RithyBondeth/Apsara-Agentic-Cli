@@ -272,8 +272,10 @@ while work runs. Defaults are 25 steps, 50 tool calls, and 100,000 turn tokens;
 set `APSARA_MAX_STEPS`, `APSARA_MAX_TOOL_CALLS`, or `APSARA_MAX_TURN_TOKENS` in
 your shell to change them. Budget stops preserve edits for review. Local token
 estimates cannot guarantee a provider billing cap. Passing checks and unchanged
-workspace reads are reused while their evidence is current; later changes
-still invalidate verification and review.
+covered file reads are reused while their evidence is current; later changes
+still invalidate verification and review. Earlier exchanges are trimmed sooner
+as the turn allowance shrinks, while required instructions and the latest
+request remain protected.
 
 ## Lifecycle hooks
 

@@ -98,11 +98,12 @@ PROGRESS_PREFIX = "Current turn progress (runtime evidence):\n"
 
 
 def _policy_fingerprint(workspace):
-    from apsara_cli.config.trust import TRUST_PATH
+    from apsara_cli.config.trust import load_trust
     from apsara_cli.engine.workspace_state import path_state
     paths = [workspace / ".apsara" / name for name in ("config.toml", "hooks.json")]
-    paths.append(TRUST_PATH)
-    return [path_state(path) for path in paths]
+    # Approving a different project must not invalidate this project's checks.
+    records = load_trust()["workspaces"].get(str(workspace.resolve()), {})
+    return [*[path_state(path) for path in paths], records]
 
 
 def _snapshot_id(snapshot):
@@ -376,11 +377,28 @@ async def _run_agent_stream(
                 critic_received=critic_seen,
             )
             try:
-                prepared = prepare_context(
-                    messages, budget=input_token_budget(active_model),
-                    estimate=lambda candidate: estimate_request_tokens(candidate, model=active_model),
-                    task_state=task_state, workspace=_workspace_root(),
-                )
+                # Keep room for verification, review, and a final answer as the
+                # cumulative allowance shrinks. Protected requirements may
+                # exceed this soft target; they must never be dropped.
+                model_input_limit = input_token_budget(active_model)
+                from apsara_cli.engine.llm import DEFAULT_MAX_COMPLETION_TOKENS
+                working_input_limit = min(model_input_limit, max(
+                    8192, (budget.remaining_usage - DEFAULT_MAX_COMPLETION_TOKENS) // 3
+                ))
+                try:
+                    prepared = prepare_context(
+                        messages, budget=working_input_limit,
+                        estimate=lambda candidate: estimate_request_tokens(candidate, model=active_model),
+                        task_state=task_state, workspace=_workspace_root(),
+                    )
+                except ContextBudgetError:
+                    if working_input_limit == model_input_limit:
+                        raise
+                    prepared = prepare_context(
+                        messages, budget=model_input_limit,
+                        estimate=lambda candidate: estimate_request_tokens(candidate, model=active_model),
+                        task_state=task_state, workspace=_workspace_root(),
+                    )
             except ContextBudgetError as exc:
                 journal.transition(AgentRunState.BLOCKED, str(exc))
                 yield json.dumps({"type": "blocked", "message": str(exc)})
@@ -635,6 +653,15 @@ async def _run_agent_stream(
                         if tool_name == "request_critic":
                             execution_arguments["_changed_files"] = list(run.changed_files)
                             execution_arguments["objective"] = objective
+                            execution_arguments["_verification"] = (
+                                run.verification_evidence[-1] if verification_seen else None
+                            )
+                            if verification_seen:
+                                execution_arguments["focus"] = (
+                                    "Review the current diff against the user objective and existing behavior. "
+                                    "Full checks passed on the current workspace. Identify concrete regressions "
+                                    "or unmet requested requirements; do not add new requirements."
+                                )
                         if reusable and cache_key in result_cache:
                             tool_result_str = result_cache[cache_key]
                             budget.reused_checks += 1

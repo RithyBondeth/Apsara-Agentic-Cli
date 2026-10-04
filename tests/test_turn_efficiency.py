@@ -12,7 +12,7 @@ from apsara_cli.engine.tools import agent_runtime_context
 from apsara_cli.engine.runtime import latest_run
 
 
-def _drive(monkeypatch, root, actions, *, before_request=None, on_tool=None, usage=10):
+def _drive(monkeypatch, root, actions, *, before_request=None, on_tool=None, usage=10, estimate=None, objective="Repair the implementation."):
     calls, requests = [], []
 
     async def stream(messages, model):
@@ -48,11 +48,11 @@ def _drive(monkeypatch, root, actions, *, before_request=None, on_tool=None, usa
 
     monkeypatch.setattr(executor, "call_llm_stream", stream)
     monkeypatch.setattr(executor, "execute_tool_async", execute)
-    monkeypatch.setattr(executor, "estimate_request_tokens", lambda *args, **kwargs: 100)
+    monkeypatch.setattr(executor, "estimate_request_tokens", estimate or (lambda *args, **kwargs: 100))
     async def collect():
         with agent_runtime_context(workspace_root=root):
             return [json.loads(e) async for e in executor.run_agent_stream([
-                {"role": "user", "content": "Repair the implementation."},
+                {"role": "user", "content": objective},
             ])]
     events = asyncio.run(collect())
     return events, calls, requests
@@ -153,8 +153,12 @@ def test_critic_accepts_a_single_fenced_verdict_without_weakening_review(fence):
 def test_review_uses_original_user_objective(monkeypatch, tmp_path):
     write_b = [("write_to_file", {"path": "b.py", "content": "fixed"})]
     events, calls, requests = _drive(monkeypatch, tmp_path, [BASE, WRITE, write_b, FULL,
-        [("request_critic", {"objective": "Only check formatting"})], None])
+        [("request_critic", {"objective": "Only check formatting", "focus": "Add unrequested new features"})], None])
     assert next(args for name, args in calls if name == "request_critic")["objective"] == "Repair the implementation."
+    args = next(args for name, args in calls if name == "request_critic")
+    assert "unrequested new features" not in args["focus"]
+    assert args["_verification"]["status"] == "passed"
+    assert args["_verification"]["phase"] == "full"
     assert latest_run(tmp_path)["state"] == "completed_verified"
 
 
@@ -345,3 +349,52 @@ def test_unreported_critic_call_retains_input_estimate(monkeypatch, tmp_path):
     budget.observe_usage(usages[0], completion_reserve=usages[0]["completion_reserve"])
     assert budget.estimated_usage == 8315
     assert budget.usage_complete is False
+
+
+def test_turn_headroom_compacts_older_reads_and_retains_the_objective(monkeypatch, tmp_path):
+    (tmp_path / "a.py").write_text("x" * 6000)
+    reads = [[("read_file_lines", {"path":"a.py", "start_line":i, "end_line":i+1})] for i in range(1,6)]
+    estimate = lambda messages, **kwargs: len(json.dumps(messages)) // 3 + 500
+    events, calls, requests = _drive(monkeypatch, tmp_path, reads + [None], usage=15000, estimate=estimate)
+    assert events[-1]["type"] == "final_answer"
+    assert any("Compacted" in e.get("message", "") for e in events)
+    assert any(m.get("role") == "user" and m.get("content") == "Repair the implementation." for m in requests[-1])
+    assert requests[-1][-1]["role"] == "tool"
+    assert requests[-1][-1]["content"] == "x" * 6000
+    assert estimate(requests[-1]) <= 8192
+
+
+def test_soft_compaction_target_never_drops_a_large_required_objective(monkeypatch, tmp_path):
+    (tmp_path / "a.py").write_text("x")
+    objective = "Required detail: " + "x" * 45000
+    estimate = lambda messages, **kwargs: len(json.dumps(messages)) // 3 + 500
+    events, calls, requests = _drive(monkeypatch, tmp_path, [[("read_file", {"path":"a.py"})],None], usage=20000, estimate=estimate, objective=objective)
+    assert events[-1]["type"] == "final_answer"
+    assert any(m.get("role") == "user" and m.get("content") == objective for m in requests[-1])
+    assert estimate(requests[-1]) > (80000 - 4096) // 3
+
+
+def test_approvals_for_another_workspace_do_not_invalidate_this_turn(monkeypatch, tmp_path):
+    from apsara_cli.config import trust
+    path = tmp_path / ".apsara/trust-test.json"
+    monkeypatch.setattr(trust, "TRUST_PATH", path)
+    def edit(index):
+        if index == 3:
+            path.parent.mkdir(exist_ok=True)
+            path.write_text(json.dumps({"workspaces": {"/another/project": {"verification:project": {"sha256":"approved"}}}}))
+    events, calls, _ = _drive(monkeypatch, tmp_path, [BASE, WRITE, FULL, FULL, None], before_request=edit)
+    assert sum(name == "verify_project" and args["phase"] == "full" for name, args in calls) == 1
+    assert latest_run(tmp_path)["state"] == "completed_verified"
+
+
+def test_current_workspace_trust_change_invalidates_reused_evidence(monkeypatch, tmp_path):
+    from apsara_cli.config import trust
+    path = tmp_path / ".apsara/trust-test.json"
+    monkeypatch.setattr(trust, "TRUST_PATH", path)
+    def edit(index):
+        if index == 3:
+            path.parent.mkdir(exist_ok=True)
+            path.write_text(json.dumps({"workspaces": {str(tmp_path.resolve()): {"verification:project": {"sha256":"changed"}}}}))
+    events, calls, _ = _drive(monkeypatch, tmp_path, [BASE, WRITE, FULL, FULL, None], before_request=edit)
+    assert sum(name == "verify_project" and args["phase"] == "full" for name, args in calls) == 2
+    assert latest_run(tmp_path)["state"] == "completed_verified"

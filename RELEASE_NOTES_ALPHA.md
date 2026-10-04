@@ -16,11 +16,16 @@ Status: prepared locally; no release tag, GitHub release, or PyPI publication.
 - Deterministic file reads, passing full checks, and approved critic results
   can be reused within a turn when source and policy fingerprints match.
   Explicit fresh checks execute again; external tools and shell commands do too.
+  Earlier exchanges compact sooner as the turn allowance shrinks, while
+  required context remains protected. Approvals for another project do not
+  invalidate this project's evidence.
 - `/budget`, the sidebar, and durable reports expose model steps, requested
   tool calls, provider totals, estimates, and reused results. Local limits
   preserve edits and block honestly when more work cannot fit.
 - Single fenced JSON critic verdicts are accepted; material findings still
-  require changes and missing review still blocks verified completion.
+  require changes and missing review still blocks verified completion. Final
+  reviews receive the actual objective and current verification evidence;
+  agent-suggested extra cases cannot expand the requested task.
 
 ## Validation
 

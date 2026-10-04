@@ -2181,6 +2181,7 @@ async def execute_tool_async(tool_name: str, arguments: Dict[str, Any]) -> str:
             focus=str(arguments.get("focus") or ""),
             model=_current_model(),
             changed_files=[str(item) for item in arguments.get("_changed_files", [])],
+            verification=arguments.get("_verification"),
         )
         usage = dict(usage or {})
         if usage.pop("request_skipped", False):

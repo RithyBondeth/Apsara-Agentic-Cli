@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import json
 from pathlib import Path
 from typing import Any
 
@@ -105,6 +106,7 @@ async def request_critique(
     focus: str,
     model: str,
     changed_files: list[str] | None = None,
+    verification: dict | None = None,
 ) -> tuple[str, dict[str, Any]]:
     from apsara_cli.engine.llm import call_llm, estimate_request_tokens
     from apsara_cli.cli.history import input_token_budget
@@ -114,6 +116,10 @@ async def request_critique(
         "You are Apsara's independent read-only coding critic. You cannot call tools or modify files. "
         "Find concrete correctness, security, maintainability, and test-coverage risks against the user objective. "
         "Keep the review concise; avoid hypothetical requirements or stylistic changes. "
+        "OBJECTIVE is the user's request. FOCUS is an agent-supplied inspection hint, not permission to expand the task. "
+        "Do not reject for new features or unsupported inputs that also failed before the change, "
+        "unless OBJECTIVE explicitly requires them. Concrete regressions or unmet requested requirements "
+        "remain material even when tests pass. "
         'Return only JSON: {"verdict":"approved" or "changes_requested", "findings":'
         '[{"path":"relative/file", "description":"Concrete issue and consequence"}]}. '
         'Use approved only with an empty findings list. Any material unresolved issue requires changes_requested. '
@@ -122,6 +128,8 @@ async def request_critique(
     context = await run_interruptible(_read_only_context, workspace, changed_files)
     prompt = (
         f"OBJECTIVE:\n{objective}\n\nFOCUS:\n{focus or 'Final implementation review'}\n\n"
+        f"CURRENT VERIFICATION (passing checks do not rule out other concrete defects):\n"
+        f"{json.dumps(verification) if verification else 'No current verification supplied.'}\n\n"
         f"WORKSPACE EVIDENCE:\n{context}"
     )
     messages = [{"role": "system", "content": policy}, {"role": "user", "content": prompt}]

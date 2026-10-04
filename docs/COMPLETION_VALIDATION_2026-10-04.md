@@ -38,14 +38,14 @@ Local evidence:
 
 ## Candidate validation
 
-Final source digest:
+Repeated-batch source digest:
 `f18c2cf9e519f46f21eed2b6616b2e2de1c4970ebc03e9f024739360cd2b8677`.
 
-The final repeated core run and optimized/reference pinned comparison are in
-progress. Their retained results will replace this progress note before the
+The bounded-runtime core repeat and pinned comparison are recorded separately
+from the subsequent adaptive-context iteration. Their retained results will replace this progress note before the
 implementation is considered fully reviewed. No release has been published.
 
-Local checks: 525 tests passed; updated installed dependencies had no known
+Local checks: 529 tests passed; updated installed dependencies had no known
 vulnerabilities according to pip-audit. Wheel and sdist metadata checks passed,
 as did clean installation, dependency consistency, and the pipx lifecycle.
 These local checks ran on macOS/Python 3.12; cross-platform CI is separate.
@@ -76,3 +76,18 @@ savings require matched, repeated, quality-qualified comparison results; the
 older pilot and updated candidate are not a controlled causal comparison.
 Go 1.27.1 and Rust 1.99.0 were installed under a temporary validation directory,
 without modifying shell profiles. No paid provider was called.
+
+## Adaptive-context iteration
+
+Source digest `e693a6573a66f8a21f5e360e42ac74be5755718174bc598541a2024161927e80`.
+This adds earlier context trimming as the turn allowance shrinks, preserves
+protected context through a fallback to the normal model limit, scopes trust
+freshness to the current workspace, and supplies final reviews with runtime
+verification evidence and the actual user objective.
+
+The repeated core and pinned comparisons are running on this source. The wheel
+will be rebuilt from the same source and its file hashes checked before handoff.
+A prompt-only review-scope experiment was insufficient: the model still treated
+a suggested unsupported input as a requirement. Those exploratory calls are
+retained locally; the final runtime replaces agent-suggested final-review hints
+with objective/verification evidence rather than relying on a prompt alone.
