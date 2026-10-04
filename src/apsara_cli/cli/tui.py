@@ -520,7 +520,7 @@ def _sidebar_text(
         if budget.get("phase"):
             phase = budget["phase"]
             spent = budget.get("phase_spent", {}).get(phase, 0)
-            limit = budget.get("phase_limits", {}).get(phase, budget["usage_limit"])
+            limit = budget.get("phase_current_limit", budget.get("phase_limits", {}).get(phase, budget["usage_limit"]))
             if phase == "finish":
                 lines(f"   Finish · {spent:,} used · {budget.get('phase_available', 0):,} available")
             else:

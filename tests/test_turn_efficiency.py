@@ -621,3 +621,26 @@ def test_final_answer_with_larger_tool_overhead_uses_unused_finish_funds(monkeyp
         usage=100,estimate=lambda *a,**kw:8000)
     assert latest_run(tmp_path)['state']=='completed_verified'
     assert latest_run(tmp_path)['budget']['phase_spent']['finish']==100
+
+
+def test_verification_uses_unused_work_funds_and_preserves_review_and_finish():
+    budget=TurnBudget(step_limit=25,reported_usage=50_000,
+        phase_spent={'explore':15_000,'implement':0,'verify':35_000})
+    assert budget.remaining_for('verify')==10_000
+    assert budget.remaining_for('implement')==10_000
+    assert not budget.request_fits(10_000,4096,phase='implement')
+    budget.observe_usage({'total_tokens':10_000},phase='verify')
+    assert budget.remaining_for('implement')==0
+    assert budget.remaining_for('verify')==0
+    assert budget.remaining_for('review')==30_000
+    assert budget.remaining_for('finish')==40_000
+
+
+def test_targeted_then_full_checks_with_large_request_overhead_can_finish(monkeypatch,tmp_path):
+    targeted=[('verify_project',{'phase':'targeted'})]
+    events,_,_=_drive(monkeypatch,tmp_path,[BASE,WRITE,targeted,FULL,None],usage=5000,
+        estimate=lambda *a,**kw:8000)
+    saved=latest_run(tmp_path)
+    assert saved['state']=='completed_verified'
+    assert saved['budget']['phase_spent']['verify']==10000
+    assert saved['budget']['phase_spent']['finish']==5000

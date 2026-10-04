@@ -154,7 +154,10 @@ funds after current checks and required review; proposed edits or review calls
 are charged to their own phases before tools execute. Targeted reads during implementation
 count toward implementation. Provider and tool-call limits still apply equally
 in optimized and reference runs. `/budget`, the sidebar, and saved reports show
-phase usage including conservative reservations.
+phase usage including conservative reservations. Verification can use unused
+exploration/implementation funds; this reduces the remaining implementation
+headroom rather than counting those funds twice. Review and finishing remain
+protected. Effective phase headroom is shown alongside the nominal allowances.
 
 The runtime moves from exploration to implementation as exploration approaches
 its limit. Source edits reopen implementation, failed checks require repairs,

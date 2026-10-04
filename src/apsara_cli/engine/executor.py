@@ -564,7 +564,7 @@ async def _run_agent_stream(
         run.budget = budget.as_dict()
         yield json.dumps({"type": "usage", "data": usage})
         yield json.dumps({"type": "budget", "data": run.budget})
-        if tool_calls and budget.phase_spent.get(budget.phase, 0) > budget.phase_limits[budget.phase]:
+        if tool_calls and budget.phase_spent.get(budget.phase, 0) > budget.phase_ceiling(budget.phase):
             reason = f"The {budget.phase} phase allowance is exhausted; pending tools were not executed. Changes are preserved."
             run.completion_reason = reason
             journal.transition(AgentRunState.BLOCKED, reason)

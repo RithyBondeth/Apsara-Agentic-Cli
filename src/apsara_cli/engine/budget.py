@@ -45,13 +45,21 @@ class TurnBudget:
         limits["finish"] += self.usage_limit - sum(limits.values())
         return limits
 
-    def remaining_for(self, phase: str) -> int:
+    def phase_ceiling(self, phase: str) -> int:
         if phase == "finish":
             # Only the executor's verified finishing stage can use otherwise
             # unused funds. Proposed edits/reviews are charged back to their
             # own phases before any tool executes.
-            return self.remaining_usage
-        return min(self.remaining_usage, max(0, self.phase_limits[phase] - self.phase_spent.get(phase, 0)))
+            return self.phase_spent.get(phase, 0) + self.remaining_usage
+        if self.usage_limit >= 32_768 and phase in {"explore", "implement", "verify"}:
+            work = ("explore", "implement", "verify")
+            ceiling = max(0, sum(self.phase_limits[p] for p in work)
+                          - sum(self.phase_spent.get(p, 0) for p in work if p != phase))
+            return ceiling if phase == "verify" else min(self.phase_limits[phase], ceiling)
+        return self.phase_limits[phase]
+
+    def remaining_for(self, phase: str) -> int:
+        return min(self.remaining_usage, max(0, self.phase_ceiling(phase) - self.phase_spent.get(phase, 0)))
 
     @classmethod
     def from_environment(cls, step_limit: int) -> "TurnBudget":
@@ -86,7 +94,8 @@ class TurnBudget:
 
     def as_dict(self) -> dict:
         return {**{k: v for k, v in vars(self).items() if not k.startswith("_")},
-                "phase_limits": self.phase_limits, "phase_available": self.remaining_for(self.phase)}
+                "phase_limits": self.phase_limits, "phase_available": self.remaining_for(self.phase),
+                "phase_current_limit": self.phase_ceiling(self.phase)}
 
 
 _ACTIVE: ContextVar[TurnBudget | None] = ContextVar("apsara_turn_budget", default=None)
