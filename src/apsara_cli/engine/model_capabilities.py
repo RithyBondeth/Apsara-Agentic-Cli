@@ -28,6 +28,8 @@ def model_capabilities(model: str) -> ModelCapabilities:
     from apsara_cli.engine.models import lookup_model, resolve_model_id, resolve_litellm_request
     canonical = resolve_model_id(model)
     entry = lookup_model(canonical)
+    if entry and entry.access_restriction:
+        raise ValueError(entry.access_restriction)
     resolved, _ = resolve_litellm_request(canonical)
     import litellm
     metadata = litellm.model_cost.get(resolved) or litellm.model_cost.get(canonical) or {}
@@ -78,6 +80,13 @@ def completion_limit(model: str, requested: int = 4096) -> int:
 def compatibility_error(exc: Exception) -> str:
     message = str(exc)
     lowered = message.lower()
+    if "insufficient account funds" in lowered or "insufficient credits" in lowered:
+        return (
+            "Provider account has insufficient credits for this model. Add credits to the selected "
+            "provider account, then retry `apsara doctor --live`, or choose another provider/model "
+            "with --model or /model (for example, a local Ollama model). A valid API key alone "
+            "does not provide paid model access."
+        )
     if "opencode" in lowered and "free tier can only be used" in lowered:
         return (
             "OpenCode provider access restriction: this request was rejected because its free tier "

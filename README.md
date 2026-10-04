@@ -35,7 +35,7 @@ cd /path/to/your/project
 apsara
 ```
 
-That immediately opens the full-screen agent with Big Pickle selected. On the
+That opens Apsara's full-screen interface with Space Bunny Free selected. On the
 first request, Apsara asks for the OpenCode key inline if one is not already
 available. The key can remain session-only or be stored in
 `~/.apsara/credentials.json` with owner-only permissions. Nothing is sent to an
@@ -54,7 +54,8 @@ That creates `.apsara/config.toml`, adds Apsara's local artifacts to
 
 | Command | What it does |
 | --- | --- |
-| `apsara` | Open the interactive Big Pickle agent in the current workspace |
+| `apsara` | Open the centered welcome and scrollable chat with Space Bunny Free |
+| `apsara --classic` | Use scrolling terminal chat |
 | `apsara run "<instruction>"` | One-shot instruction, then exit |
 | `apsara init` | Set up `.apsara/` in this project and start chatting |
 | `apsara sessions` | List saved sessions for a workspace |
@@ -68,6 +69,15 @@ That creates `.apsara/config.toml`, adds Apsara's local artifacts to
 Run `apsara <command> --help` for the full flag list.
 Interactive flags work directly too, for example `apsara --read-only` or
 `apsara --model ollama/llama3.2`.
+The default terminal layout follows OpenCode's structure: a centered welcome,
+filled transcript cards, an anchored composer with the model inside, and a
+details sidebar on wide terminals. Apsara keeps its gradient logo, blue and
+violet accents, colorful Markdown, and green/red diffs. `Ctrl+B` toggles the
+sidebar; `PageUp`/`PageDown` and the mouse wheel scroll the conversation.
+Use `apsara --classic` for normal terminal scrollback, or `--tui` to explicitly
+select the full-screen interface. Piped output uses scrolling chat by default.
+Use `apsara --color` to force colors even when your shell exports `NO_COLOR`;
+`apsara --no-color` disables them in both interfaces.
 
 ## Tools
 
@@ -296,7 +306,7 @@ cannot change token limits, fallbacks, pricing paths, or provider endpoints.
 ```toml
 [defaults]
 workspace = "."
-model = "opencode/big-pickle"
+model = "opencode/space-bunny-free"
 stateless = false
 allow_bash = false
 allowed_commands = ["@verify", "@git"]
@@ -311,12 +321,43 @@ welcome_subtitle = "A focused terminal coding assistant"
 welcome_animation = true
 ```
 
-The default is `opencode/big-pickle`, called through OpenCode Zen's
+The default is `opencode/space-bunny-free`, called through OpenCode Zen's
 OpenAI-compatible endpoint. Set `OPENCODE_API_KEY`, or let the UI request it
-inline on first use. Big Pickle is free for a limited period; OpenCode states that
-submitted data may be used to improve the model during that period, so choose a
-different provider for confidential repositories. `--model` and the config
-file can still select any supported LiteLLM model.
+inline on first use. This model passed Apsara's live streaming/tool-call probe
+on 2026-10-03. OpenCode currently lists it as temporarily free; current provider
+access rules, usage limits, and pricing apply. Apsara does not automatically
+fall back from a free model to a paid model.
+See [OpenCode Zen pricing](https://opencode.ai/docs/zen/).
+
+Big Pickle is no longer the default or selectable: its free tier rejected Apsara
+requests because it requires the OpenCode client. Existing explicit Big Pickle
+settings produce an actionable error; Apsara does not silently switch them to
+a paid model. Use `--model`, `/model`, or the config file to choose another
+supported model, including local Ollama models.
+
+Check your default model access and streamed tool calling with:
+
+```bash
+apsara doctor --live
+```
+
+The live check makes a small API request; paid model selections are billable.
+Missing credits for paid models, invalid keys, and account model restrictions
+must be resolved with the provider.
+
+For free testing, Space Bunny Free passed Apsara's live streaming/tool-call probe
+on 2026-10-03 with an OpenCode Zen key:
+
+```bash
+apsara --model bunny
+apsara doctor --live --model bunny
+```
+
+OpenCode currently lists this model as temporarily free. Apsara registers it as
+free so automatic fallback cannot switch it to a paid model. Probe success
+confirms access and the tool-call format; coding reliability is measured
+separately by the benchmark suites. Existing explicit model settings retain
+precedence over the startup default; running a benchmark does not rewrite them.
 
 For provider resilience, set a comma-separated fallback chain. Apsara switches
 only when a request fails before emitting output. A free or local model will
@@ -324,7 +365,7 @@ only fall back automatically to another known free/local model, so a temporary
 outage cannot silently create a provider bill:
 
 ```bash
-export APSARA_FALLBACK_MODELS="ollama/llama3.2,groq/llama-3.3-70b-versatile"
+export APSARA_FALLBACK_MODELS="ollama/llama3.2,groq/openai/gpt-oss-120b"
 ```
 
 Paid models remain available through `--model` or `/model`; Apsara shows a

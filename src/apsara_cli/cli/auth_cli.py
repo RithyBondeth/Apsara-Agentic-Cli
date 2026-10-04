@@ -16,12 +16,15 @@ from apsara_cli.engine.models import (
     default_model_for_provider,
     format_context_window,
     models_for_provider,
+    model_price_label,
+    lookup_model,
     provider_env_var,
     providers_in_order,
     resolve_litellm_request,
     validate_key_format,
 )
 from apsara_cli.shared.ui import ConsoleUI
+from apsara_cli.engine.model_capabilities import compatibility_error
 
 CREDENTIALS_DISPLAY = str(CREDENTIALS_PATH).replace(str(Path.home()), "~", 1)
 
@@ -42,7 +45,7 @@ def _prompt_choice(ui: ConsoleUI, providers: list[str]) -> Optional[int]:
         need = "local, no key" if env_var is None else f"key: {env_var}"
         marker = ui.style(" (current)", "38;2;120;200;150") if provider == active else ""
         ui.print_line(f"  {idx}. {provider}{marker}")
-        ui.print_line(ui.dim(f"       {default_model}  ·  {ctx} ctx  ·  {need}"))
+        ui.print_line(ui.dim(f"       {default_model}  ·  {ctx} ctx  ·  {need}  ·  {model_price_label(default_model)}"))
 
     ui.print_line()
     try:
@@ -70,13 +73,17 @@ async def _verify_key(model: str, env_var: str, api_key: str) -> tuple[Optional[
             model=resolved_model,
             messages=[{"role": "user", "content": "ping"}],
             max_tokens=1,
+            timeout=30,
             **provider_options,
         )
         return True, ""
     except litellm.AuthenticationError as exc:
         return False, str(exc)
     except Exception as exc:  # network/rate-limit/etc. — can't confirm, don't block
-        return None, str(exc)
+        detail = compatibility_error(exc)
+        if detail.startswith(("OpenCode provider access restriction:", "Provider account has insufficient credits")):
+            return False, detail
+        return None, detail
     finally:
         if previous is None:
             os.environ.pop(env_var, None)
@@ -96,6 +103,13 @@ async def login() -> int:
     provider = providers[choice]
     env_var = provider_env_var(provider)
     default_model = default_model_for_provider(provider)
+    if default_model is None:
+        ui.error(f"No compatible default model is available for {provider}.")
+        return 1
+    ui.info(f"Selected model: {default_model} · {model_price_label(default_model)}")
+    entry = lookup_model(default_model)
+    if provider == "opencode" and entry and entry.tier == "paid":
+        ui.info("OpenCode Zen API requests require account credits and are billed at provider rates.")
 
     # Local providers (ollama) need no key.
     if env_var is None:
@@ -130,8 +144,8 @@ async def login() -> int:
     verdict, detail = await _verify_key(default_model, env_var, api_key)
 
     if verdict is False:
-        ui.error(f"The provider rejected this API key: {detail}")
-        ui.info("Nothing was saved. Double-check the key and try again.")
+        ui.error(f"The provider rejected access to {default_model}: {detail}")
+        ui.info("Nothing was saved. Check model access and credentials, then try again.")
         return 1
 
     save_provider_key(provider, api_key=api_key, default_model=default_model)

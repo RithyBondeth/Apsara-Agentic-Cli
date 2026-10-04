@@ -67,7 +67,7 @@ from apsara_cli.cli.chat import (
     save_if_needed,
     turn_mode_word,
 )
-from apsara_cli.cli.input import SlashCompleter
+from apsara_cli.cli.input import SlashCompleter, color_depth_for_ui
 from apsara_cli.cli.options import resolve_runtime_options
 from apsara_cli.cli.session import load_session_messages, load_session_usage, sanitize_session_name
 from apsara_cli.engine.models import (
@@ -93,7 +93,7 @@ _DIMTXT = "38;2;120;125;138"
 _PANEL_GUTTER = 3
 _SIDEBAR_CONTENT_WIDTH = 34
 _SIDEBAR_TOTAL_WIDTH = _SIDEBAR_CONTENT_WIDTH + (_PANEL_GUTTER * 2)
-_MIN_CONVERSATION_WIDTH = 20
+_MIN_CONVERSATION_WIDTH = 48
 _MIN_CARD_PANEL_WIDTH = 8
 
 
@@ -391,6 +391,20 @@ class TuiConsoleUI(ConsoleUI):
             self._invalidate()
 
 
+class _ScrollTextControl(FormattedTextControl):
+    """Keep scrolling within the text snapshot captured for this render."""
+
+    def create_content(self, width, height):
+        content = super().create_content(width, height)
+        # Worker output can change after fragments are captured but before the
+        # cursor callback runs. Never index the snapshot with a newer position.
+        cursor = content.cursor_position
+        content.cursor_position = Point(
+            x=cursor.x, y=max(0, min(cursor.y, content.line_count - 1))
+        )
+        return content
+
+
 class _PlaceholderProcessor(Processor):
     """OpenCode-style dim hint text shown inside the input box while empty."""
 
@@ -615,10 +629,11 @@ def _status_left(ui: TuiConsoleUI, options: Any) -> ANSI:
 
 
 def _status_right(ui: TuiConsoleUI, options: Any, current_model: str) -> ANSI:
-    total = ui._session_total_tokens
+    total = ui._context_tokens
     tok = f"{total / 1000:.1f}K" if total >= 1000 else str(total)
     entry = lookup_model(current_model)
-    context = format_context_window(entry.context_window) if entry and entry.context_window else "—"
+    budget = ui._context_budget or (entry.context_window if entry else 0)
+    context = format_context_window(budget) if budget else "—"
     mode = turn_mode_word(options).upper()
     mode_color = {
         "DRY-RUN": "48;2;112;84;35",
@@ -630,6 +645,12 @@ def _status_right(ui: TuiConsoleUI, options: Any, current_model: str) -> ANSI:
     cost_label = ui.session_cost_label()
     if ui.terminal_columns() < 64:
         right = (
+            f"{ui.style(f' {mode} ', '1', '38;2;238;232;255', mode_color)}"
+            f"{' ' * _PANEL_GUTTER}"
+        )
+    elif ui.terminal_columns() < 100:
+        right = (
+            f"{ui.style(cost_label, '38;2;130;210;160')}  "
             f"{ui.style(f' {mode} ', '1', '38;2;238;232;255', mode_color)}"
             f"{' ' * _PANEL_GUTTER}"
         )
@@ -776,7 +797,7 @@ async def tui_loop(args: object, config: object) -> int:
     if config_theme is not None:
         config_theme.apply_to(theme)
 
-    ui = TuiConsoleUI(use_color=True, auto_approve=options.auto_approve, theme=theme)
+    ui = TuiConsoleUI(use_color=options.use_color, auto_approve=options.auto_approve, theme=theme)
 
     history: list[dict[str, Any]] = []
     if not options.stateless:
@@ -829,18 +850,6 @@ async def tui_loop(args: object, config: object) -> int:
     from apsara_cli.cli.banner import banner_taglines, logo_width, small_logo_line, styled_logo_lines
     _subtitle, _powered = banner_taglines(config)
 
-    # Keep branding on the welcome screen. Once chat starts, a compact
-    # session header gives the transcript maximum visual priority.
-    ui.lines.extend([
-        "",
-        (
-            f"  {ui.style('✦', '1', ui.theme.accent)} "
-            f"{ui.style('Apsara', '1', '38;2;225;230;242')}  "
-            f"{ui.dim('·')} {ui.dim(session_label)}"
-        ),
-        f"  {ui.dim('Type / for commands · ctrl+b toggles details')}",
-    ])
-
     # ── Layout ─────────────────────────────────────────────────────────────
 
     # Sidebar session subtitle: 'resumed · <ts>' or 'new · <ts>', OpenCode's
@@ -858,7 +867,7 @@ async def tui_loop(args: object, config: object) -> int:
             return Point(x=0, y=max(total - 1, 0))
         return Point(x=0, y=max(chat_window.vertical_scroll, 0))
 
-    chat_control = FormattedTextControl(
+    chat_control = _ScrollTextControl(
         lambda: _chat_text(ui), focusable=False, get_cursor_position=_chat_cursor_position
     )
     chat_window = Window(content=chat_control, wrap_lines=True, always_hide_cursor=True)
@@ -868,7 +877,7 @@ async def tui_loop(args: object, config: object) -> int:
         # its logical cursor at row zero on the next render.
         return Point(x=0, y=max(sidebar_window.vertical_scroll, 0))
 
-    sidebar_control = FormattedTextControl(
+    sidebar_control = _ScrollTextControl(
         lambda: _sidebar_text(ui, options, state["model"], session_label, history, session_started),
         focusable=False,
         get_cursor_position=_sidebar_cursor_position,
@@ -895,10 +904,7 @@ async def tui_loop(args: object, config: object) -> int:
             dont_extend_width=True,
         ),
     ], height=1, style="class:statusbar")
-    status_bar = HSplit([
-        status_content,
-        Window(height=1, char=" ", style="class:statusbar"),
-    ], height=2, style="class:statusbar")
+    status_bar = status_content
 
     history_dir = Path.home() / ".apsara"
     history_dir.mkdir(parents=True, exist_ok=True)
@@ -909,10 +915,9 @@ async def tui_loop(args: object, config: object) -> int:
         multiline=True,
     )
     # ── Typing box (shared builder for the welcome and chat layouts) ──────
-    # OpenCode-style: a rounded border, a blue accent bar on the inside-left
-    # edge, a placeholder while empty, and the 'Build · Model' mode
-    # line inside the box, under the text.
-    _placeholder = _PlaceholderProcessor("Ask Apsara to build, explain, or debug…")
+    # A flat filled surface, colored left rail and mode/model inside the panel,
+    # matching the supplied OpenCode references without losing Apsara's palette.
+    _placeholder = _PlaceholderProcessor('Ask anything… "What is the tech stack of this project?"')
 
     def _make_input_box(input_height, width=None):
         control_window = Window(
@@ -926,6 +931,8 @@ async def tui_loop(args: object, config: object) -> int:
                 ],
             ),
             height=input_height,
+            dont_extend_height=True,
+            style="class:composer",
         )
         mode_window = Window(
             content=FormattedTextControl(
@@ -933,45 +940,32 @@ async def tui_loop(args: object, config: object) -> int:
             ),
             height=1,
         )
-        composer_hint = Window(
-            content=FormattedTextControl(
-                lambda: ANSI(
-                    ui.style("working…", "38;2;247;200;100")
-                    if state["busy"]
-                    else ui.style(
-                        "enter send · esc+enter newline"
-                        if ui.terminal_columns() >= 100
-                        else "enter send",
-                        _DIMTXT,
-                    )
-                ),
-                focusable=False,
-            ),
-            height=1,
-            align=WindowAlign.RIGHT,
-            dont_extend_width=True,
-        )
-        composer_meta = VSplit([mode_window, composer_hint], height=1)
-
         def _row(content, height) -> VSplit:
             return VSplit([
                 Window(width=1, char="▌", style="class:accent"),
                 Window(width=_PANEL_GUTTER, char=" "),
                 content,
                 Window(width=_PANEL_GUTTER, char=" "),
-                Window(width=1, char="│", style="class:inputborder"),
             ], height=height)
 
         padding_row = lambda: _row(Window(char=" "), 1)
+
+        def _input_rows() -> Dimension:
+            panel_width = width().preferred if callable(width) else ui.content_width() - 5
+            text_width = max(1, panel_width - 1 - 2 * _PANEL_GUTTER)
+            preferred = control_window.preferred_height(text_width, 6).preferred
+            return Dimension.exact(max(1, preferred))
+
         box = HSplit([
             padding_row(),
-            _row(control_window, input_height),
-            _row(composer_meta, 1),
+            _row(control_window, _input_rows),
+            padding_row(),
+            _row(mode_window, 1),
             padding_row(),
         ], width=width, style="class:composer")
         return box, control_window
 
-    chat_box, chat_input_window = _make_input_box(2)
+    chat_box, chat_input_window = _make_input_box(Dimension(min=1, preferred=1, max=6))
 
     # Permission requests stay in the conversation flow. Keeping this card
     # inside the left transcript pane preserves the user's context and the
@@ -1012,9 +1006,40 @@ async def tui_loop(args: object, config: object) -> int:
         filter=approval_active,
     )
 
-    # ── Chat layout: transcript + detail sidebar + boxed input + status bar ─
+    # The composer belongs to the conversation pane. The sidebar continues
+    # alongside it down to the shared status strip, like the supplied reference.
+    def _chat_heading() -> ANSI:
+        from rich.text import Text
+        title = next((str(m.get("content", "")).split("\n")[0]
+                      for m in history if m.get("role") == "user"), "New session")
+        heading = Text(title)
+        heading.truncate(max(1, ui.content_width() - 8), overflow="ellipsis")
+        return ANSI(f"  {ui.style('✦', '1', '38;2;190;150;250')} "
+                    f"{ui.style(heading.plain, '1', '38;2;225;230;242')}")
+
+    def _composer_hints() -> ANSI:
+        left = (
+            ui.style("● working", "38;2;247;200;100") + ui.dim(" · esc interrupt")
+            if state["busy"] else ui.style("enter", "38;2;140;180;255") + ui.dim(" send")
+        )
+        right = ui.style("ctrl+p", "38;2;190;150;250") + ui.dim(" commands")
+        if ui.content_width() >= 70:
+            right = ui.style("ctrl+b", "38;2;130;210;160") + ui.dim(" details   ") + right
+        return ANSI(left + "   " + right)
+
     def _transcript_container():
-        conversation = HSplit([chat_window, approval_inline])
+        conversation = HSplit([
+            Window(height=1, char=" "),
+            Window(FormattedTextControl(_chat_heading), height=1),
+            Window(height=1, char=" "),
+            chat_window,
+            approval_inline,
+            Window(height=1, char=" "),
+            VSplit([Window(width=2), chat_box, Window(width=3)]),
+            VSplit([Window(width=2), Window(FormattedTextControl(_composer_hints), height=1),
+                    Window(width=3)], height=1),
+            Window(height=1, char=" "),
+        ])
         if sidebar_state["visible"] and ui.sidebar_is_rendered():
             return VSplit([
                 conversation,
@@ -1025,29 +1050,26 @@ async def tui_loop(args: object, config: object) -> int:
 
     chat_root = HSplit([
         DynamicContainer(_transcript_container),
-        Window(height=1, char=" "),
-        chat_box,
         status_bar,
     ])
 
     # ── Welcome layout: everything vertically centered, OpenCode-style ─────
     from apsara_cli import __version__
 
-    box_w = _welcome_panel_width(ui.terminal_columns())
-    box_dimension = Dimension(min=1, preferred=box_w, max=box_w)
+    box_dimension = lambda: Dimension.exact(_welcome_panel_width(ui.terminal_columns()))
     welcome_box, welcome_input_window = _make_input_box(
         Dimension(min=1, preferred=1, max=4), width=box_dimension
     )
 
-    if terminal_width() >= logo_width() + 2:
-        logo_ansi = ANSI("\n".join(styled_logo_lines(ui, 0)))
-        logo_height = 5
-    else:
-        logo_ansi = ANSI(small_logo_line(ui))
-        logo_height = 1
+    def _welcome_logo() -> ANSI:
+        return ANSI(
+            "\n".join(styled_logo_lines(ui, 0))
+            if ui.terminal_columns() >= logo_width() + 2 else small_logo_line(ui)
+        )
+
     logo_window = Window(
-        FormattedTextControl(logo_ansi, focusable=False),
-        height=logo_height,
+        FormattedTextControl(_welcome_logo, focusable=False),
+        height=lambda: 5 if ui.terminal_columns() >= logo_width() + 2 else 1,
         align=WindowAlign.CENTER,
     )
     subtitle_window = Window(
@@ -1060,6 +1082,9 @@ async def tui_loop(args: object, config: object) -> int:
         height=1,
         align=WindowAlign.CENTER,
     )
+    roomy_welcome = Condition(
+        lambda: ui.app is not None and ui.app.output.get_size().rows >= 28
+    )
 
     _key = "1", "38;2;140;180;255"
     hints_ansi = ANSI(
@@ -1069,13 +1094,18 @@ async def tui_loop(args: object, config: object) -> int:
     )
     hints_row = VSplit([
         Window(),
-        Window(FormattedTextControl(hints_ansi, focusable=False), width=box_dimension, height=1),
+        Window(FormattedTextControl(hints_ansi, focusable=False), width=box_dimension,
+               height=1, align=WindowAlign.RIGHT),
         Window(),
     ], height=1)
 
     _entry = lookup_model(options.model)
     _key_ok = _entry is None or is_key_available(_entry) or _entry.tier == "local"
-    if not _key_ok:
+    if _entry and _entry.tier == "paid":
+        tip_ansi = ANSI(
+            ui.style(f"Paid model · {model_price_label(options.model)} · funded {_entry.provider} account required", '38;2;240;190;110')
+        )
+    elif not _key_ok:
         tip_ansi = ANSI(
             f"{ui.style('●', '38;2;240;170;90')} {ui.style('Tip', '1', '38;2;240;170;90')} "
             f"{ui.style('Ask anything — your provider key will be requested securely on first use', '38;2;200;205;215')}"
@@ -1096,11 +1126,11 @@ async def tui_loop(args: object, config: object) -> int:
     _ws_display = "~" + _ws[len(_home):] if _ws.startswith(_home) else _ws
     welcome_bar = VSplit([
         Window(
-            FormattedTextControl(ANSI(" " + ui.style(_ws_display, _DIMTXT)), focusable=False),
+            FormattedTextControl(ANSI(" " + ui.style(_ws_display, "38;2;240;190;110")), focusable=False),
             height=1,
         ),
         Window(
-            FormattedTextControl(ANSI(ui.style(__version__, _DIMTXT) + " "), focusable=False),
+            FormattedTextControl(ANSI(ui.style("Apsara " + __version__, "38;2;190;150;250") + " "), focusable=False),
             height=1,
             align=WindowAlign.RIGHT,
             dont_extend_width=True,
@@ -1111,8 +1141,8 @@ async def tui_loop(args: object, config: object) -> int:
         Window(height=Dimension(weight=2)),
         logo_window,
         Window(height=1, char=" "),
-        subtitle_window,
-        powered_window,
+        ConditionalContainer(subtitle_window, filter=roomy_welcome),
+        ConditionalContainer(powered_window, filter=roomy_welcome),
         Window(height=2, char=" "),
         VSplit([Window(), welcome_box, Window()]),
         Window(height=1, char=" "),
@@ -1169,6 +1199,7 @@ async def tui_loop(args: object, config: object) -> int:
             app_.invalidate()
 
     style = Style.from_dict({
+        "surface": "bg:#0a0b10 fg:#e1e6f2",
         "accent": "fg:#6096fa",
         "sep": "fg:#3d4668",
         "inputborder": "fg:#5a6cb4",
@@ -1176,7 +1207,7 @@ async def tui_loop(args: object, config: object) -> int:
         "approvalaccent": "fg:#f0b35f bg:#0e1015",
         "placeholder": "fg:#5a616e",
         "sidebar": f"bg:{PANEL_BACKGROUND_HEX}",
-        "statusbar": "bg:#0e1015",
+        "statusbar": "bg:#25243b",
         "overlay": "bg:#08090d",
         "approval": "bg:#0e1015 fg:#e1e6f2",
         "approval.border": "fg:#65739a bg:#0e1015",
@@ -1269,6 +1300,9 @@ async def tui_loop(args: object, config: object) -> int:
 
     body = FloatContainer(
         content=DynamicContainer(lambda: welcome_root if state["welcome"] else chat_root),
+        # An explicit container style paints spacer windows and margins too.
+        # A default theme alone leaves blank cells in the terminal's own color.
+        style="class:surface",
         floats=[
             Float(xcursor=True, ycursor=True, content=CompletionsMenu(max_height=16, scroll_offset=1)),
             Float(left=0, right=0, top=0, bottom=0, content=picker_centered),
@@ -1788,6 +1822,7 @@ async def tui_loop(args: object, config: object) -> int:
         ),
         key_bindings=kb,
         style=style,
+        color_depth=color_depth_for_ui(options.use_color),
         full_screen=True,
         mouse_support=True,
         before_render=_before_render,

@@ -29,7 +29,7 @@ The fixtures intentionally start with failing tests. A live run uses provider
 tokens and copies every fixture beneath `.apsara/benchmarks/`:
 
 ```bash
-apsara eval evals/coding-core.json --live --model opencode/big-pickle --repeat 3
+apsara eval evals/coding-core.json --live --model opencode/space-bunny-free --repeat 3
 ```
 
 `--repeat` runs every case independently from a fresh fixture copy and therefore
@@ -60,7 +60,7 @@ provider-specific token and tool-call budgets.
 ## Comparing context efficiency
 
 ```bash
-apsara eval evals/pinned-repositories.json --live --compare --model opencode/big-pickle --repeat 3
+apsara eval evals/pinned-repositories.json --live --compare --model opencode/space-bunny-free --repeat 3
 ```
 
 The optimized profile starts with core tools and activates specialized schemas

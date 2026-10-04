@@ -89,11 +89,11 @@ def test_missing_global_config_value_is_left_for_argparse_to_reject():
     assert _argv_with_default_command(["--config"]) == ["--config"]
 
 
-def test_interactive_start_uses_big_pickle_without_hidden_auth_default(tmp_path):
+def test_interactive_start_uses_zen_default_without_hidden_auth_default(tmp_path):
     args = build_parser().parse_args(["chat", "--workspace", str(tmp_path)])
     options = resolve_runtime_options(args, _defaults())
 
-    assert options.model == "opencode/big-pickle"
+    assert options.model == "opencode/space-bunny-free"
     assert re.fullmatch(r"session-\d{8}-\d{6}-[0-9a-f]{4}", options.session)
 
 

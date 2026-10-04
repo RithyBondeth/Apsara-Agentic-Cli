@@ -44,13 +44,14 @@ cd /path/to/some/project
 apsara
 ```
 
-The full-screen UI opens immediately with `opencode/big-pickle` selected. If its
+The full-screen interface opens with `opencode/space-bunny-free` selected. If its
 key is missing, Apsara requests it inline on the first prompt. You can keep it
 for the session or store it in `~/.apsara/credentials.json` (owner-only).
 Each plain launch starts a fresh saved conversation. Use `apsara --continue` to
 resume the latest one, or `apsara --session <name>` to open a named conversation.
 Alternatively, export the provider key or put it in a workspace `.env`; an
 explicitly exported variable always wins over stored credentials.
+Use `apsara --classic` if you prefer scrolling terminal chat.
 
 ```env
 OPENCODE_API_KEY=your_opencode_zen_api_key
@@ -60,9 +61,8 @@ AGENT_ALLOWED_COMMANDS=pwd,ls,find,rg,cat,sed,head,tail,wc
 AGENT_MAX_FILE_SIZE_BYTES=1000000
 ```
 
-Big Pickle is free for a limited period,
-but OpenCode states that submitted data may be used to improve the model during
-that period; do not use it with confidential repositories.
+Space Bunny Free passed Apsara's live tool-call probe. Its free availability is
+temporary; select another supported model if the provider removes access.
 
 ## 5. Check the environment
 

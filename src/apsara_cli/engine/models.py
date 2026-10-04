@@ -19,7 +19,7 @@ from datetime import date
 from typing import Optional
 
 
-DEFAULT_MODEL = "opencode/big-pickle"
+DEFAULT_MODEL = "opencode/space-bunny-free"
 OPENCODE_API_BASE = "https://opencode.ai/zen/v1"
 
 
@@ -45,14 +45,49 @@ class ModelEntry:
     promotional_pricing: bool = False
     pricing_verified_on: Optional[str] = None
     pricing_source_url: Optional[str] = None
+    access_restriction: Optional[str] = None
 
 
 # ── Registry ──────────────────────────────────────────────────────────────────
 
 MODELS: list[ModelEntry] = [
-    # ── OpenCode Zen (free for a limited period) ─────────────────────────────
+    # ── OpenCode Zen ───────────────────────────────────────────────────────
     ModelEntry(
         model_id=DEFAULT_MODEL,
+        display_name="Space Bunny Free",
+        provider="opencode",
+        tier="free",
+        # Published models.dev metadata; Apsara still caps input at 128k.
+        context_window=1_048_576,
+        env_var="OPENCODE_API_KEY",
+        notes="Temporary free coding model; streaming/tool-call probe passed 2026-10-03",
+        aliases=["zen", "space-bunny", "bunny"],
+        input_cost_per_million=0.0,
+        output_cost_per_million=0.0,
+        cache_read_cost_per_million=0.0,
+        promotional_pricing=True,
+        pricing_verified_on="2026-10-03",
+        pricing_source_url="https://opencode.ai/docs/zen/",
+    ),
+    ModelEntry(
+        model_id="opencode/minimax-m2.5",
+        display_name="MiniMax M2.5 (OpenCode Zen)",
+        provider="opencode",
+        tier="paid",
+        context_window=204_800,
+        env_var="OPENCODE_API_KEY",
+        notes="Paid Zen model; deprecated by OpenCode",
+        aliases=["minimax", "minimax-m2.5"],
+        input_cost_per_million=0.30,
+        output_cost_per_million=1.20,
+        cache_read_cost_per_million=0.06,
+        lifecycle="deprecated",
+        replacement="opencode/minimax-m2.7",
+        pricing_verified_on="2026-10-03",
+        pricing_source_url="https://opencode.ai/docs/zen/",
+    ),
+    ModelEntry(
+        model_id="opencode/big-pickle",
         display_name="Big Pickle",
         provider="opencode",
         tier="free",
@@ -65,6 +100,11 @@ MODELS: list[ModelEntry] = [
         promotional_pricing=True,
         pricing_verified_on="2026-08-09",
         pricing_source_url="https://opencode.ai/docs/zen",
+        access_restriction=(
+            "Big Pickle's free tier rejected Apsara requests because it requires the OpenCode client. "
+            "Choose opencode/space-bunny-free, or another supported provider with --model or /model. "
+            "Changing the API key alone may not resolve this restriction."
+        ),
     ),
 
     # ── Groq (free tier — fastest hosted inference) ───────────────────────────
@@ -300,6 +340,8 @@ def model_lifecycle(entry: ModelEntry, today: date | None = None) -> str:
 
 def model_availability(entry: ModelEntry, today: date | None = None) -> tuple[bool, str]:
     """Whether Apsara can safely select this model, plus a user-facing reason."""
+    if entry.access_restriction:
+        return False, entry.access_restriction
     lifecycle = model_lifecycle(entry, today)
     replacement = f" Use {entry.replacement} instead." if entry.replacement else ""
     if lifecycle == "retired":
@@ -375,14 +417,14 @@ KEY_HINTS: dict[str, tuple[Optional[str], str]] = {
 def resolve_litellm_request(model: str) -> tuple[str, dict[str, str]]:
     """Return the LiteLLM model ID and provider-specific request options."""
     canonical_model = resolve_model_id(model)
-    if canonical_model == DEFAULT_MODEL:
+    if canonical_model.startswith("opencode/"):
         options = {
             "api_base": os.environ.get("OPENCODE_API_BASE", OPENCODE_API_BASE),
         }
         api_key = os.environ.get("OPENCODE_API_KEY")
         if api_key:
             options["api_key"] = api_key
-        return "openai/big-pickle", options
+        return "openai/" + canonical_model.split("/", 1)[1], options
     return canonical_model, {}
 
 

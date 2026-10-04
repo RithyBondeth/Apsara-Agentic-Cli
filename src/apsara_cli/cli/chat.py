@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from getpass import getpass
+from io import StringIO
 import json
 import os
 import sys
@@ -246,17 +247,18 @@ def mode_line_parts(options: "ResolvedOptions", current_model: str) -> tuple[str
     """(mode, model display name, provider) for the input-box mode line."""
     entry = lookup_model(current_model)
     model_name = entry.display_name if entry else current_model.split("/")[-1]
-    provider = entry.provider.capitalize() if entry else ""
+    provider = (
+        "OpenCode Zen" if entry and entry.provider == "opencode"
+        else entry.provider.capitalize() if entry else ""
+    )
     return turn_mode_word(options), model_name, provider
 
 
 def build_mode_line(ui: "ConsoleUI", options: "ResolvedOptions", current_model: str) -> str:
     """
-    OpenCode-style mode line rendered under the input:
-    'Build · Big Pickle' — mode accent-colored and model bold. Provider and
-    context details remain available in the optional details sidebar.
+    Mode, model and provider inside the composer, with subdued metadata.
     """
-    mode, model_name, _provider = mode_line_parts(options, current_model)
+    mode, model_name, provider = mode_line_parts(options, current_model)
     mode_color = {
         "Dry-run": "38;2;247;200;100",
         "Read-only": "38;2;240;170;90",
@@ -267,7 +269,31 @@ def build_mode_line(ui: "ConsoleUI", options: "ResolvedOptions", current_model: 
         ui.dim("·"),
         ui.style(model_name, "1", "38;2;225;230;242"),
     ]
+    if provider:
+        parts.append(ui.dim(provider))
     return " ".join(parts)
+
+
+def build_scrolling_composer(
+    ui: "ConsoleUI", options: "ResolvedOptions", current_model: str, columns: int
+) -> tuple[str, str, str]:
+    """Compact inline composer with Apsara's blue, violet and green accents."""
+    from rich.text import Text
+
+    width = max(1, min(columns - 4, 84))
+    pad = "  " if columns >= 5 else ""
+    border = ui.theme.border
+    continuation = pad + ui.style("▌", ui.theme.accent) + " "
+    prompt = "\n" + pad + ui.style("─" * width, border) + "\n" + continuation
+    mode = Text.from_ansi(build_mode_line(ui, options, current_model))
+    mode.truncate(max(1, width - 2), overflow="ellipsis")
+    rendered = StringIO()
+    from rich.console import Console
+    Console(file=rendered, force_terminal=ui.use_color,
+            color_system="truecolor" if ui.use_color else None, width=max(1, width - 2),
+            height=1, legacy_windows=False).print(mode, end="", soft_wrap=True)
+    footer = pad + ui.style("▌", "38;2;190;150;250") + " " + rendered.getvalue()
+    return prompt, footer, continuation
 
 
 def _load_stored_keys() -> None:
@@ -375,7 +401,9 @@ def build_model_rows(
             if entry.aliases:
                 aliases_hint = "  " + ui.dim("alias: " + ", ".join(entry.aliases[:3]))
 
-            if lifecycle == "retired":
+            if entry.access_restriction:
+                health_text = ui.style("[access restricted]", "38;2;235;110;100")
+            elif lifecycle == "retired":
                 health_text = ui.style("[retired]", "38;2;235;110;100")
             elif lifecycle in {"retiring", "deprecated"}:
                 health_text = ui.style(f"[{lifecycle}]", "38;2;247;200;100")
@@ -387,7 +415,7 @@ def build_model_rows(
                 f"{health_text}  {ui.dim(model_price_label(entry.model_id))}  {ctx_text}  {key_text}  "
                 f"{ui.dim(entry.model_id)}{aliases_hint}"
             )
-            provider_rows.append((line, entry.model_id if lifecycle != "retired" else None))
+            provider_rows.append((line, entry.model_id if model_availability(entry)[0] else None))
 
         if provider_rows:
             rows.append((ui.style(provider.upper(), "1", "38;2;190;200;220"), None))
@@ -1157,11 +1185,21 @@ async def execute_instruction(
     from apsara_cli.engine.executor import run_agent_stream
     from apsara_cli.engine.llm import DEFAULT_MAX_COMPLETION_TOKENS
 
+    entry = lookup_model(model)
+    if entry:
+        selectable, reason = model_availability(entry)
+        if not selectable:
+            ui.error(reason)
+            ui.last_run_state = "failed"
+            return list(history), None
+
     next_history = list(history)
     next_history.append({"role": "user", "content": instruction})
     aggregate_usage: Optional[dict[str, Any]] = None
     turn_checkpoint_id: Optional[str] = None
     ui.begin_turn()
+    if entry and entry.tier == "paid":
+        ui.info(f"Model: {model} · {model_price_label(model)} · billed by {entry.provider}.")
 
     def merge_usage(data: dict[str, Any]) -> None:
         nonlocal aggregate_usage
@@ -1351,12 +1389,11 @@ async def chat_loop(args: object, config: object) -> int:
     from apsara_cli.shared.ui import terminal_width
     from apsara_cli import __version__
 
-    _terminal = max(48, min(terminal_width(), 112))
+    _terminal = max(12, min(terminal_width(), 112))
 
     def _center_pad(plain_len: int) -> str:
         return " " * max((_terminal - plain_len) // 2, 2)
 
-    session_label = sanitize_session_name(options.session) if not options.stateless else "stateless"
     _active_provider = get_active_provider()
     _model_entry = lookup_model(current_model)
     _key_ok = _model_entry is not None and (
@@ -1365,6 +1402,8 @@ async def chat_loop(args: object, config: object) -> int:
 
     # Keyboard hints, 'tab agents  ctrl+p commands' style.
     _hints = [("/", "commands"), ("esc+enter", "newline"), ("↑↓", "history")]
+    if _terminal < 64:
+        _hints = [("/", "commands"), ("↑↓", "history")]
     _hints_plain = "   ".join(f"{key} {label}" for key, label in _hints)
     _hints_styled = "   ".join(
         f"{ui.style(key, '1', '38;2;140;180;255')} {ui.dim(label)}" for key, label in _hints
@@ -1422,51 +1461,36 @@ async def chat_loop(args: object, config: object) -> int:
             f"{_gs_gap}{ui.style(_gs_cmd, '1', '38;2;180;210;255')}"
         )
 
-    # Bottom footer: workspace path left, session · version right, with
-    # colored accents (⌂ gold, session green, version violet).
-    _left_plain = f"⌂ {options.workspace_root}"
-    _right_plain = f"{session_label} · v{__version__}"
+    # Keep the welcome footer to workspace and version; session details are
+    # available through /session rather than competing with the composer.
+    from rich.text import Text
+    _workspace = str(options.workspace_root)
+    if options.workspace_root.is_relative_to(Path.home()):
+        _workspace = "~/" + str(options.workspace_root.relative_to(Path.home()))
+    _right_plain = f"v{__version__}"
+    _path = Text(_workspace)
+    _path.truncate(max(1, _terminal - len(_right_plain) - 9), overflow="ellipsis")
+    _left_plain = f"⌂ {_path.plain}"
     _gap = max(_terminal - len(_left_plain) - len(_right_plain) - 4, 2)
-    _left_styled = f"{ui.style('⌂', '38;2;240;190;110')} {ui.dim(str(options.workspace_root))}"
-    _right_styled = (
-        f"{ui.style(session_label, '38;2;130;210;160')}{ui.dim(' · ')}"
-        f"{ui.style('v' + __version__, '38;2;190;150;250')}"
-    )
+    _left_styled = f"{ui.style('⌂', '38;2;240;190;110')} {ui.dim(_path.plain)}"
+    _right_styled = ui.style(_right_plain, '38;2;190;150;250')
     ui.print_line()
     ui.print_line(f"  {_left_styled}{' ' * _gap}{_right_styled}")
-
-    _BOX_BORDER = "38;2;90;108;180"  # soft indigo, matches the TUI input box
 
     # Servers stay connected for the whole session rather than being
     # respawned each turn.
     async with mcp_session(config, options, ui):
         while True:
-            # OpenCode-style typing box: a rounded top border, a padding row, and
-            # a '│▌' gutter are part of the prompt itself; the bottom toolbar
-            # draws the box's lower edge carrying the 'Build · Model' mode line.
-            _w = max(40, min(terminal_width() - 2, 110))
-            _mode, _model_name, _provider = mode_line_parts(options, current_model)
-            _mode_plain = f"{_mode} · {_model_name}" + (f" {_provider}" if _provider else "")
-            _fill = max(_w - len(_mode_plain) - 6, 1)
-            _toolbar = (
-                ui.style("╰─ ", _BOX_BORDER)
-                + build_mode_line(ui, options, current_model)
-                + " "
-                + ui.style("─" * _fill + "╯", _BOX_BORDER)
-            )
-            _prompt = (
-                "\n"
-                + ui.style("╭" + "─" * (_w - 2) + "╮", _BOX_BORDER)
-                + "\n"
-                + ui.style("│", _BOX_BORDER)
-                + "\n"
-                + ui.style("│", _BOX_BORDER)
-                + ui.style("▌", ui.theme.accent)
-                + " "
+            _prompt, _toolbar, _continuation = build_scrolling_composer(
+                ui, options, current_model, terminal_width()
             )
             try:
                 instruction = (
-                    await get_input_async(_prompt, options.workspace_root, toolbar=_toolbar)
+                    await get_input_async(
+                        _prompt, options.workspace_root,
+                        toolbar=_toolbar, continuation=_continuation,
+                        use_color=options.use_color,
+                    )
                 ).strip()
             except KeyboardInterrupt:
                 ui.print_line()

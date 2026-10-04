@@ -105,7 +105,7 @@ def resolve_runtime_options(args: argparse.Namespace, config_defaults: Any) -> R
 
     workspace = resolve_value(args.workspace, config_defaults.workspace, ".")
     workspace_root = resolve_workspace(str(workspace))
-    # Precedence: --model flag > config default > Apsara's Big Pickle default.
+    # Precedence: --model flag > config default > Apsara's OpenCode Zen default.
     # Stored credentials provide keys, not a hidden startup-model override.
     _raw_model = resolve_value(args.model, config_defaults.model, None)
     if _raw_model is None:

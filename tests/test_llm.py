@@ -98,7 +98,7 @@ def test_call_llm_routes_default_through_opencode(monkeypatch):
 
     assert message == "ok"
     assert usage == {}
-    assert request["model"] == "openai/big-pickle"
+    assert request["model"] == "openai/space-bunny-free"
     assert request["api_base"] == "https://opencode.ai/zen/v1"
     assert request["api_key"] == "zen-test-key"
 

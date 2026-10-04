@@ -32,10 +32,10 @@ def _scripted_llm(scripts):
     return _fake, state
 
 
-def _run(conversation):
+def _run(conversation, model=executor.DEFAULT_MODEL):
     """Drive run_agent_stream to completion, returning parsed event dicts."""
     async def _collect():
-        return [json.loads(chunk) async for chunk in executor.run_agent_stream(conversation)]
+        return [json.loads(chunk) async for chunk in executor.run_agent_stream(conversation, model=model)]
 
     return asyncio.run(_collect())
 
@@ -221,9 +221,9 @@ def test_free_model_never_falls_back_to_paid_or_unknown(monkeypatch):
         yield {"type": "stream_error", "error": "primary unavailable"}
 
     with patch.object(executor, "call_llm_stream", fake):
-        events = _run([{"role": "user", "content": "hi"}])
+        events = _run([{"role": "user", "content": "hi"}], model="groq/openai/gpt-oss-120b")
 
-    assert seen == [executor.DEFAULT_MODEL]
+    assert seen == ["groq/openai/gpt-oss-120b"]
     assert events[-1]["type"] == "error"
     assert not any("falling back" in e.get("message", "") for e in events)
     assert any("Skipped paid or unknown" in e.get("message", "") for e in events)
