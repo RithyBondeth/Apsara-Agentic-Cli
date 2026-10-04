@@ -373,8 +373,7 @@ def test_soft_compaction_target_never_drops_a_large_required_objective(monkeypat
     objective = "Required detail: " + "x" * 45000
     estimate = lambda messages, **kwargs: len(json.dumps(messages)) // 3 + 500
     events, calls, requests = _drive(monkeypatch, tmp_path, [[("read_file", {"path":"a.py"})],None], usage=20000, estimate=estimate, objective=objective)
-    assert events[-1]["type"] == "blocked"
-    assert "phase allowance" in events[-1]["message"]
+    assert events[-1]["type"] == "final_answer"
     assert any(m.get("role") == "user" and m.get("content") == objective for m in requests[-1])
     assert estimate(requests[-1]) >= len(objective) // 3
 
@@ -590,18 +589,18 @@ def test_optional_review_does_not_spend_final_answer_allowance(monkeypatch,tmp_p
 
 
 def test_closed_implementation_can_use_reserved_full_verification(monkeypatch,tmp_path):
-    reads=[[('read_file_lines',{'path':'a.py','start_line':i,'end_line':i})] for i in range(1,5)]
+    reads=[[('read_file_lines',{'path':'a.py','start_line':i,'end_line':i})] for i in range(1,7)]
     events,_,_=_drive(monkeypatch,tmp_path,[BASE,WRITE]+reads+[FULL,None],usage=6000)
     saved=latest_run(tmp_path)
     assert saved['budget']['implementation_closed']
     assert saved['state']=='completed_verified'
-    assert saved['budget']['phase_spent']['implement']==30000
+    assert saved['budget']['phase_spent']['implement']==42000
     assert saved['budget']['phase_spent']['verify']==6000
     assert saved['budget']['phase_spent']['finish']==6000
 
 
 def test_verification_reserve_cannot_fund_more_edits(monkeypatch,tmp_path):
-    reads=[[('read_file_lines',{'path':'a.py','start_line':i,'end_line':i})] for i in range(1,5)]
+    reads=[[('read_file_lines',{'path':'a.py','start_line':i,'end_line':i})] for i in range(1,7)]
     more=[('write_to_file',{'path':'b.py','content':'must not be written'})]
     events,_,_=_drive(monkeypatch,tmp_path,[BASE,WRITE]+reads+[more],usage=6000)
     assert events[-1]['type']=='blocked'
@@ -610,7 +609,7 @@ def test_verification_reserve_cannot_fund_more_edits(monkeypatch,tmp_path):
 
 
 def test_finishing_can_use_unused_funds_without_expanding_implementation():
-    budget=TurnBudget(step_limit=25,reported_usage=60_000,phase_spent={'finish':5000,'implement':30000})
+    budget=TurnBudget(step_limit=25,reported_usage=60_000,phase_spent={'finish':5000,'implement':30000,'explore':20000,'review':5000})
     assert budget.request_fits(8000,4096,phase='finish')
     assert not budget.request_fits(8000,4096,phase='implement')
     assert not budget.request_fits(40_000,4096,phase='finish')
@@ -644,3 +643,15 @@ def test_targeted_then_full_checks_with_large_request_overhead_can_finish(monkey
     assert saved['state']=='completed_verified'
     assert saved['budget']['phase_spent']['verify']==10000
     assert saved['budget']['phase_spent']['finish']==5000
+
+
+def test_implementation_reclaims_unused_exploration_without_spending_check_reserves():
+    budget=TurnBudget(step_limit=25)
+    budget.observe_usage({'total_tokens':10000},phase='explore')
+    assert budget.phase_ceiling('implement')==40000
+    budget.observe_usage({'total_tokens':40000},phase='implement')
+    assert budget.remaining_for('explore')==0
+    assert budget.remaining_for('implement')==0
+    assert budget.remaining_for('verify')==10000
+    assert budget.remaining_for('review')==30000
+    assert budget.remaining_usage==50000

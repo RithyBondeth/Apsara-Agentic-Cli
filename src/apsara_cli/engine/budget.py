@@ -55,7 +55,12 @@ class TurnBudget:
             work = ("explore", "implement", "verify")
             ceiling = max(0, sum(self.phase_limits[p] for p in work)
                           - sum(self.phase_spent.get(p, 0) for p in work if p != phase))
-            return ceiling if phase == "verify" else min(self.phase_limits[phase], ceiling)
+            if phase == "verify":
+                return ceiling
+            ceiling = max(0, ceiling - max(0, self.phase_limits["verify"] - self.phase_spent.get("verify", 0)))
+            maximum = (self.phase_limits["explore"] + self.phase_limits["implement"]
+                       if phase == "implement" else self.phase_limits["explore"])
+            return min(maximum, ceiling)
         return self.phase_limits[phase]
 
     def remaining_for(self, phase: str) -> int:

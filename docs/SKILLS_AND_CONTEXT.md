@@ -148,7 +148,8 @@ approval or override material findings. Model reviewers can still make mistakes.
 Within the default 100,000-token turn, requests have cumulative phase allowances:
 20,000 for exploration, 30,000 for implementation, 10,000 for verification,
 30,000 for review, and 10,000 for finishing. They scale with the overall token
-limit. Unused allowances do not fund additional exploration or implementation;
+limit. Exploration cannot borrow later allowances. Implementation may reclaim unused
+exploration funds while preserving verification, review, and finishing reserves;
 revisiting a phase does not reset its usage. Finishing can use otherwise unused
 funds after current checks and required review; proposed edits or review calls
 are charged to their own phases before tools execute. Targeted reads during implementation
