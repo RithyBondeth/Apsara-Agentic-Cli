@@ -655,3 +655,16 @@ def test_implementation_reclaims_unused_exploration_without_spending_check_reser
     assert budget.remaining_for('verify')==10000
     assert budget.remaining_for('review')==30000
     assert budget.remaining_usage==50000
+
+
+def test_unavailable_fresh_review_cannot_keep_an_older_approval(monkeypatch,tmp_path):
+    def fail_fresh(name,args):
+        if name=='request_critic' and args.get('fresh'):
+            return 'Error: Remaining review allowance cannot fit the request. Changes remain unapproved.'
+    actions=[BASE,WRITE,[('write_to_file',{'path':'b.py','content':'fixed'})],FULL,
+        [('request_critic',{})],[('request_critic',{'fresh':True})],None]
+    events,_,_=_drive(monkeypatch,tmp_path,actions,on_tool=fail_fresh)
+    saved=latest_run(tmp_path)
+    assert saved['state']=='blocked' and saved['critic_status']=='unavailable'
+    assert saved['verification_status']=='passed'
+    assert events[-1]['type']=='blocked' and 'not approved' in events[-1]['message']

@@ -825,6 +825,7 @@ async def _run_agent_stream(
                     if critic_seen and not actual_changes and not policy_changed:
                         result_cache[cache_key] = tool_result_str
                 elif tool_name == "request_critic":
+                    critic_seen = False
                     run.critic_status = "unavailable"
 
                 # Include the result: identical call + identical output is a
