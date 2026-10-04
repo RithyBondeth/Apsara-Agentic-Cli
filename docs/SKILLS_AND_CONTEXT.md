@@ -142,3 +142,47 @@ and current structured verification evidence. The runtime replaces agent-supplie
 final-review hints with a request to assess concrete regressions and unmet user
 requirements; hints cannot add new task requirements. Passing checks do not force
 approval or override material findings. Model reviewers can still make mistakes.
+
+### Phase allowances and review recovery
+
+Within the default 100,000-token turn, requests have cumulative phase allowances:
+20,000 for exploration, 30,000 for implementation, 10,000 for verification,
+30,000 for review, and 10,000 for finishing. They scale with the overall token
+limit. Unused allowances do not fund additional exploration or implementation;
+revisiting a phase does not reset its usage. Targeted reads during implementation
+count toward implementation. Provider and tool-call limits still apply equally
+in optimized and reference runs. `/budget`, the sidebar, and saved reports show
+phase usage including conservative reservations.
+
+The runtime moves from exploration to implementation as exploration approaches
+its limit. Source edits reopen implementation, failed checks require repairs,
+and current full checks lead to required review and finishing. Before sending
+another request, the runtime checks both phase and overall headroom. Protected
+instructions and requirements are never shortened just to fit a phase. A task
+that cannot fit is blocked with preserved edits. Below 32,768 turn tokens,
+separate phase partitions are disabled because meaningful review/final-answer
+reservations cannot fit; the overall limit remains enforced.
+
+For unchanged source and policy, the independent reviewer has at most two actual
+provider attempts in a turn. A missing structured verdict or provider timeout
+can trigger one automatic recovery attempt. It receives the complete evidence,
+original objective, verification result, and any prior unstructured concerns.
+Concrete findings are not retried into approval. Invalid verdict fields and
+non-timeout provider errors remain unavailable. Explicit fresh calls share the
+same attempt allowance; source or policy changes produce a new review identity.
+Both attempts count toward the review/turn budget, including unknown usage and
+cancellation reservations. Exhausted recovery cannot approve the changes.
+Oversized evidence is rejected explicitly rather than silently approving a
+truncated diff or omitted new files.
+
+### Successful-work comparison
+
+Benchmark comparisons retain all-trial usage and outcomes, and separately show
+completed, independently verified, constrained repairs with valid failing
+baselines. Token/latency means for successful work exclude incomplete usage.
+All-trial tokens per completion includes failed attempts' costs when every
+trial's usage is known. Matched successful work pairs unique case/trial IDs
+across optimized and reference profiles; unsafe, flaky, blocked, or incomplete
+trials cannot establish savings. At least three matched successful pairs for
+every case are needed to label the sample repeated. Even then, results describe
+those samples and do not establish general causal efficiency gains.

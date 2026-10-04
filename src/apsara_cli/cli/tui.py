@@ -517,6 +517,11 @@ def _sidebar_text(
         if not budget['usage_complete']:
             lines(f"   {ui.style('Includes reserved estimates', '38;2;247;200;100')}")
         lines(f"   {budget['reused_checks']} results reused")
+        if budget.get("phase"):
+            phase = budget["phase"]
+            spent = budget.get("phase_spent", {}).get(phase, 0)
+            limit = budget.get("phase_limits", {}).get(phase, budget["usage_limit"])
+            lines(f"   {phase.title()} · {spent:,}/{limit:,} tokens")
         lines("")
 
     # Model: name, provider · tier, context window, key status.

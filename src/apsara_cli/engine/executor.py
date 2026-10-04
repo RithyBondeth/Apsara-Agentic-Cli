@@ -143,11 +143,17 @@ def _progress_message(run, budget, baseline, verified, reviewed, requires_review
     else:
         next_action = "Inspect only the context needed for the objective; attempt baseline verification before editing."
     return PROGRESS_PREFIX + (
-        f"Objective: {run.objective}\nChanged files: {', '.join(run.changed_files) or 'none'}\n"
+        f"Objective: {run.objective[:1200]}"
+        f"{' (full request remains in the protected user message)' if len(run.objective) > 1200 else ''}\n"
+        f"Changed files: {', '.join(run.changed_files) or 'none'}\n"
         f"Baseline attempted: {baseline}; full verification current: {verified}; review: {run.critic_status}.\n"
         f"Budget: {budget.steps_used}/{budget.step_limit} model steps, "
         f"{budget.tool_calls_used}/{budget.tool_call_limit} tool calls, "
         f"{budget.remaining_usage} tokens remaining (local estimates may differ from provider billing).\n"
+        f"Phase: {budget.phase}; {budget.remaining_for(budget.phase)} tokens available in this phase. "
+        "Unused phase allowances cannot fund more exploration or implementation. "
+        "During implementation use targeted searches and bounded line reads, not whole-repository surveys. "
+        "Verification and review allowances are reserved for finishing.\n"
         "Prefer parallel_read_files for independent reads. Reuse current evidence. "
         "Create temporary probes only when needed to resolve a concrete gap; remove your probes before final verification.\n"
         + next_action
@@ -178,6 +184,9 @@ async def run_agent_stream(
                 yield event
         except (asyncio.CancelledError, GeneratorExit):
             cancellation.set()
+            active_budget = _ACTIVE.get()
+            if active_budget:
+                run.budget = active_budget.as_dict()
             if run.finished_at is None:
                 journal.transition(AgentRunState.CANCELLED, "Turn interrupted; changes preserved for review.")
             raise
@@ -365,6 +374,13 @@ async def _run_agent_stream(
             requires_review = changed_workspace and (
                 len(run.changed_files) >= 2 or risky_workspace_change or bool(run.critic_findings)
             )
+            if verification_seen and changed_workspace:
+                budget.phase = "review" if requires_review and not critic_seen else "finish"
+            elif changed_workspace and budget.phase not in {"implement", "verify"}:
+                budget.phase = "implement"
+            elif (not changed_workspace and budget.phase == "explore"
+                  and budget.phase_spent.get("explore", 0) >= budget.phase_limits["explore"] * 0.65):
+                budget.phase = "implement"
             messages = [m for m in messages if not (
                 m.get("role") == "system" and str(m.get("content", "")).startswith(PROGRESS_PREFIX)
             )]
@@ -382,9 +398,10 @@ async def _run_agent_stream(
                 # exceed this soft target; they must never be dropped.
                 model_input_limit = input_token_budget(active_model)
                 from apsara_cli.engine.llm import DEFAULT_MAX_COMPLETION_TOKENS
-                working_input_limit = min(model_input_limit, max(
-                    8192, (budget.remaining_usage - DEFAULT_MAX_COMPLETION_TOKENS) // 3
-                ))
+                working_input_limit = min(model_input_limit, max(1, min(
+                    max(8192, (budget.remaining_usage - DEFAULT_MAX_COMPLETION_TOKENS) // 3),
+                    budget.remaining_for(budget.phase) - DEFAULT_MAX_COMPLETION_TOKENS,
+                )))
                 try:
                     prepared = prepare_context(
                         messages, budget=working_input_limit,
@@ -405,8 +422,15 @@ async def _run_agent_stream(
                 return
             messages = prepared.messages
             from apsara_cli.engine.llm import DEFAULT_MAX_COMPLETION_TOKENS
-            if not budget.request_fits(prepared.tokens, DEFAULT_MAX_COMPLETION_TOKENS):
-                reason = "Turn token budget cannot fit another request; changes are preserved for review."
+            if not budget.request_fits(prepared.tokens, DEFAULT_MAX_COMPLETION_TOKENS, phase=budget.phase):
+                if (budget.phase == "explore" and budget.request_fits(
+                        prepared.tokens, DEFAULT_MAX_COMPLETION_TOKENS, phase="implement")):
+                    budget.phase = "implement"
+                    # Rebuild context and progress under the new allowance.
+                    continue
+                reason = ("Turn token budget cannot fit another request; changes are preserved for review."
+                          if not budget.request_fits(prepared.tokens, DEFAULT_MAX_COMPLETION_TOKENS) else
+                          f"The {budget.phase} phase allowance cannot fit another request; changes are preserved for review.")
                 run.budget = budget.as_dict()
                 run.completion_reason = reason
                 journal.transition(AgentRunState.BLOCKED, reason)
@@ -651,6 +675,9 @@ async def _run_agent_stream(
                     try:
                         execution_arguments = dict(arguments)
                         if tool_name == "request_critic":
+                            execution_arguments["_review_key"] = _snapshot_id([
+                                before_snapshot, policy_state, objective,
+                            ])
                             execution_arguments["_changed_files"] = list(run.changed_files)
                             execution_arguments["objective"] = objective
                             execution_arguments["_verification"] = (
@@ -685,7 +712,8 @@ async def _run_agent_stream(
                 if not after_hook.allowed:
                     tool_result_str = f"Error: Blocked by {after_event} hook: {after_hook.reason}"
                 for auxiliary_usage in consume_auxiliary_usage():
-                    budget.observe_usage(auxiliary_usage, completion_reserve=auxiliary_usage.get("completion_reserve"))
+                    if not auxiliary_usage.get("budget_accounted"):
+                        budget.observe_usage(auxiliary_usage, completion_reserve=auxiliary_usage.get("completion_reserve"), phase="review")
                     yield json.dumps({"type": "usage", "data": auxiliary_usage})
                 run.budget = budget.as_dict()
                 yield json.dumps({"type": "budget", "data": run.budget})
@@ -711,6 +739,7 @@ async def _run_agent_stream(
                 if mutation_applied or actual_changes or policy_changed:
                     if mutation_applied or actual_changes:
                         changed_workspace = True
+                        budget.phase = "implement"
                     if tool_name == "delete_file" or (actual_changes and tool_name not in mutation_tools):
                         risky_workspace_change = True
                     # Verification and review evidence only applies to the
@@ -745,6 +774,8 @@ async def _run_agent_stream(
                             run.verification_status = "stale"
                         verified_snapshot = dict(after_snapshot) if verification_seen else None
                         verified_policy = _policy_fingerprint(_workspace_root()) if verification_seen else None
+                    if phase != "baseline":
+                        budget.phase = "verify" if typed_result.ok and evidence.get("status") == "passed" else "implement"
                     command = f"verify_project:{phase}"
                     if command not in run.verification:
                         run.verification.append(command)
@@ -782,6 +813,14 @@ async def _run_agent_stream(
                     "tool_call_id": tool_call["id"],
                     "result": model_result,
                 })
+                review_key = _snapshot_id([before_snapshot, policy_state, objective])
+                if (tool_name == "request_critic" and verification_seen and not typed_result.ok
+                        and budget._review_attempts.get(review_key, 0) >= 2):
+                    reason = "Required review is unavailable after bounded recovery; changes remain unapproved and preserved."
+                    run.completion_reason = reason
+                    journal.transition(AgentRunState.BLOCKED, reason)
+                    yield json.dumps({"type": "blocked", "message": reason})
+                    return
 
             cycling = any(
                 count >= MAX_IDENTICAL_INVOCATIONS for count in invocation_counts.values()

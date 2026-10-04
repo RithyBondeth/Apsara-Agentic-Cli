@@ -574,6 +574,10 @@ def handle_chat_command(
             f"Turn token limit: {budget['usage_limit']:,}\n"
             f"Complete provider usage: {budget['usage_complete']}\n"
             f"Reused results: {budget['reused_checks']}\n\n"
+            f"Current phase: {budget.get('phase', 'unknown')}\n"
+            f"Phase allowances: {budget.get('phase_limits', {})}\n"
+            f"Phase usage (reported plus reserved): {budget.get('phase_spent', {})}\n"
+            f"Review attempts: {budget.get('review_attempts', 0)}\n\n"
             "Set APSARA_MAX_STEPS, APSARA_MAX_TOOL_CALLS, and APSARA_MAX_TURN_TOKENS before launching.\n"
             "Token enforcement uses local request estimates; this is not a provider billing cap."
         )

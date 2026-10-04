@@ -12,7 +12,7 @@ from apsara_cli.engine.tools import agent_runtime_context
 from apsara_cli.engine.runtime import latest_run
 
 
-def _drive(monkeypatch, root, actions, *, before_request=None, on_tool=None, usage=10, estimate=None, objective="Repair the implementation."):
+def _drive(monkeypatch, root, actions, *, before_request=None, on_tool=None, usage=10, estimate=None, objective="Repair the implementation.", actual_critic=False):
     calls, requests = [], []
 
     async def stream(messages, model):
@@ -43,6 +43,9 @@ def _drive(monkeypatch, root, actions, *, before_request=None, on_tool=None, usa
             (root / arguments["path"]).write_text(arguments["content"])
             return "Wrote file."
         if name == "request_critic":
+            if actual_critic:
+                from apsara_cli.engine.tools import execute_tool_async
+                return await execute_tool_async(name, arguments)
             return '{"verdict":"approved","findings":[]}'
         return (root / arguments["path"]).read_text()
 
@@ -351,12 +354,13 @@ def test_unreported_critic_call_retains_input_estimate(monkeypatch, tmp_path):
     assert budget.usage_complete is False
 
 
-def test_turn_headroom_compacts_older_reads_and_retains_the_objective(monkeypatch, tmp_path):
+def test_phase_stop_compacts_older_reads_and_retains_the_objective(monkeypatch, tmp_path):
     (tmp_path / "a.py").write_text("x" * 6000)
     reads = [[("read_file_lines", {"path":"a.py", "start_line":i, "end_line":i+1})] for i in range(1,6)]
     estimate = lambda messages, **kwargs: len(json.dumps(messages)) // 3 + 500
-    events, calls, requests = _drive(monkeypatch, tmp_path, reads + [None], usage=15000, estimate=estimate)
-    assert events[-1]["type"] == "final_answer"
+    events, calls, requests = _drive(monkeypatch, tmp_path, reads + [None], usage=10000, estimate=estimate)
+    assert events[-1]["type"] == "blocked"
+    assert "phase allowance" in events[-1]["message"]
     assert any("Compacted" in e.get("message", "") for e in events)
     assert any(m.get("role") == "user" and m.get("content") == "Repair the implementation." for m in requests[-1])
     assert requests[-1][-1]["role"] == "tool"
@@ -369,9 +373,10 @@ def test_soft_compaction_target_never_drops_a_large_required_objective(monkeypat
     objective = "Required detail: " + "x" * 45000
     estimate = lambda messages, **kwargs: len(json.dumps(messages)) // 3 + 500
     events, calls, requests = _drive(monkeypatch, tmp_path, [[("read_file", {"path":"a.py"})],None], usage=20000, estimate=estimate, objective=objective)
-    assert events[-1]["type"] == "final_answer"
+    assert events[-1]["type"] == "blocked"
+    assert "phase allowance" in events[-1]["message"]
     assert any(m.get("role") == "user" and m.get("content") == objective for m in requests[-1])
-    assert estimate(requests[-1]) > (80000 - 4096) // 3
+    assert estimate(requests[-1]) >= len(objective) // 3
 
 
 def test_approvals_for_another_workspace_do_not_invalidate_this_turn(monkeypatch, tmp_path):
@@ -398,3 +403,178 @@ def test_current_workspace_trust_change_invalidates_reused_evidence(monkeypatch,
     events, calls, _ = _drive(monkeypatch, tmp_path, [BASE, WRITE, FULL, FULL, None], before_request=edit)
     assert sum(name == "verify_project" and args["phase"] == "full" for name, args in calls) == 2
     assert latest_run(tmp_path)["state"] == "completed_verified"
+
+
+def test_phase_stop_preserves_review_and_finish_allowances(monkeypatch, tmp_path):
+    actions = []
+    for i in range(12):
+        (tmp_path / f'a{i}.py').write_text('unchanged')
+        actions.append([('read_file', {'path': f'a{i}.py'})])
+    events, calls, requests = _drive(monkeypatch, tmp_path, actions, usage=6000)
+    saved = latest_run(tmp_path)['budget']
+    assert events[-1]['type'] == 'blocked'
+    assert 'phase allowance' in events[-1]['message']
+    assert saved['reported_usage'] < saved['usage_limit']
+    assert saved['phase_spent'].get('review', 0) == 0
+    assert saved['phase_spent'].get('finish', 0) == 0
+    assert sum(saved['phase_limits'].values()) == saved['usage_limit']
+    assert all((tmp_path / f'a{i}.py').read_text() == 'unchanged' for i in range(12))
+
+
+def test_phase_budgets_follow_verification_and_reopen_after_edit(monkeypatch, tmp_path):
+    write_b = [('write_to_file', {'path':'b.py', 'content':'fixed'})]
+    events, _, requests = _drive(monkeypatch, tmp_path, [BASE, WRITE, write_b, FULL,
+        [('request_critic', {})], WRITE, FULL, [('request_critic', {})], None])
+    assert latest_run(tmp_path)['state'] == 'completed_verified'
+    budget = latest_run(tmp_path)['budget']
+    assert budget['phase_spent']['review'] == 20
+    assert budget['phase_spent']['finish'] == 20  # An edit after review invalidates earlier evidence.
+    assert budget['phase_spent']['implement'] >= 20
+    assert budget['phase'] == 'finish'
+
+
+def _review_run(monkeypatch, tmp_path, responses, budget=None, key='snapshot'):
+    from apsara_cli.engine import critic, llm
+    from apsara_cli.engine.budget import _ACTIVE
+    from unittest.mock import AsyncMock
+    mocked = AsyncMock(side_effect=responses)
+    monkeypatch.setattr(llm, 'call_llm', mocked)
+    monkeypatch.setattr(llm, 'estimate_request_tokens', lambda *args, **kwargs: 100)
+    monkeypatch.setattr(critic, '_read_only_context', lambda *args: 'COMPLETE DIFF')
+    async def run():
+        token = _ACTIVE.set(budget)
+        try:
+            return await critic.request_critique(tmp_path, objective='Fix the requested behavior.',
+                focus='', model=executor.DEFAULT_MODEL, review_key=key)
+        finally:
+            _ACTIVE.reset(token)
+    return asyncio.run(run()), mocked
+
+
+def test_review_recovers_once_and_accounts_each_attempt(monkeypatch, tmp_path):
+    budget = TurnBudget(step_limit=25)
+    (content, usage), mocked = _review_run(monkeypatch, tmp_path, [
+        ({'content':'Concrete concern: the new boundary must reject invalid sizes.'}, {'total_tokens':200}),
+        ({'content':'{"verdict":"changes_requested","findings":[{"description":"Invalid sizes accepted"}]}'}, {'total_tokens':300}),
+    ], budget)
+    assert mocked.await_count == 2
+    assert critic_evidence(content)['verdict'] == 'changes_requested'
+    assert 'Concrete concern' in mocked.await_args.args[0][-1]['content']
+    assert 'COMPLETE DIFF' in mocked.await_args.args[0][1]['content']
+    assert usage['total_tokens'] == 500 and usage['auxiliary_calls'] == 2
+    assert usage['provider_reported_calls'] == 2 and usage['budget_accounted'] is True
+    assert budget.reported_usage == 500 and budget.phase_spent['review'] == 500
+    assert budget.review_attempts == 2
+
+
+def test_review_findings_never_trigger_a_retry_for_approval(monkeypatch, tmp_path):
+    (content, _), mocked = _review_run(monkeypatch, tmp_path, [
+        ({'content':'{"verdict":"approved","findings":[{"description":"Wrong result"}]}'}, {'total_tokens':10}),
+    ], TurnBudget(step_limit=25))
+    assert mocked.await_count == 1
+    assert critic_evidence(content)['verdict'] == 'changes_requested'
+
+
+def test_review_timeout_unknown_usage_is_reserved_before_retry(monkeypatch, tmp_path):
+    budget = TurnBudget(step_limit=25)
+    (content, usage), mocked = _review_run(monkeypatch, tmp_path, [
+        ({'error':'Provider response timed out.'}, {}),
+        ({'content':'APPROVED'}, {'total_tokens':50}),
+    ], budget)
+    assert content == 'APPROVED' and mocked.await_count == 2
+    assert usage['unreported_calls'] == 1 and usage['provider_reported_calls'] == 1
+    assert budget.estimated_usage == 100 + 8192
+    assert budget.reported_usage == 50 and budget.usage_complete is False
+
+
+def test_review_retry_refuses_to_spend_finish_reservation(monkeypatch, tmp_path):
+    budget = TurnBudget(step_limit=25, usage_limit=40_000)
+    (content, usage), mocked = _review_run(monkeypatch, tmp_path, [({'error':'Provider response timed out.'}, {})], budget)
+    assert mocked.await_count == 1
+    assert 'phase allowance' in content
+    assert usage['unreported_calls'] == 1
+    assert budget.remaining_usage > 30_000
+
+
+def test_agent_cannot_reset_review_attempts_with_fresh_or_new_focus(monkeypatch, tmp_path):
+    budget = TurnBudget(step_limit=25)
+    _, mocked = _review_run(monkeypatch, tmp_path, [({'content':''}, {'total_tokens':10})] * 2, budget)
+    (content, usage), second = _review_run(monkeypatch, tmp_path, [], budget)
+    assert mocked.await_count == 2 and second.await_count == 0
+    assert 'attempts exhausted' in content and usage['request_skipped']
+    # Different source/policy fingerprint grants another independent review.
+    (content, _), third = _review_run(monkeypatch, tmp_path, [({'content':'APPROVED'}, {'total_tokens':10})], budget, key='changed-snapshot')
+    assert third.await_count == 1 and content == 'APPROVED'
+
+
+def test_critic_dispatch_does_not_count_recovery_twice(monkeypatch, tmp_path):
+    from apsara_cli.engine import critic, llm, tools
+    from apsara_cli.engine.budget import _ACTIVE
+    from unittest.mock import AsyncMock
+    mocked = AsyncMock(side_effect=[({'content':''}, {'total_tokens':20}), ({'content':'APPROVED'}, {'total_tokens':30})])
+    monkeypatch.setattr(llm, 'call_llm', mocked)
+    monkeypatch.setattr(llm, 'estimate_request_tokens', lambda *a, **kw: 100)
+    monkeypatch.setattr(critic, '_read_only_context', lambda *a: 'DIFF')
+    async def run():
+        budget = TurnBudget(step_limit=25)
+        token = _ACTIVE.set(budget)
+        try:
+            with agent_runtime_context(workspace_root=tmp_path):
+                content = await tools.execute_tool_async('request_critic', {'objective':'Fix','_review_key':'source'})
+                usage = tools.consume_auxiliary_usage()
+                for u in usage:
+                    if not u.get('budget_accounted'):
+                        budget.observe_usage(u, completion_reserve=u.get('completion_reserve'), phase='review')
+                return budget, content, usage
+        finally:
+            _ACTIVE.reset(token)
+    budget, content, usages = asyncio.run(run())
+    assert content == 'APPROVED'
+    assert budget.reported_usage == 50 and usages[0]['auxiliary_calls'] == 2
+    assert budget.phase_spent['review'] == 50
+
+
+def test_cancelled_review_reserves_unknown_usage(monkeypatch, tmp_path):
+    budget = TurnBudget(step_limit=25)
+    with pytest.raises(asyncio.CancelledError):
+        _review_run(monkeypatch, tmp_path, [asyncio.CancelledError()], budget)
+    assert budget.estimated_usage == 8292
+    assert budget.phase_spent['review'] == 8292 and not budget.usage_complete
+
+
+def test_oversized_review_evidence_cannot_be_silently_truncated(monkeypatch, tmp_path):
+    from apsara_cli.engine import critic, llm
+    from unittest.mock import AsyncMock
+    import subprocess
+    subprocess.run(['git','init','-q',str(tmp_path)], check=True)
+    (tmp_path/'large.py').write_text('x'*12_001)
+    mocked = AsyncMock()
+    monkeypatch.setattr(llm, 'call_llm', mocked)
+    content, usage = asyncio.run(critic.request_critique(tmp_path, objective='Review all changes',
+        focus='', model=executor.DEFAULT_MODEL, changed_files=['large.py']))
+    assert 'no partial review' in content and usage['request_skipped']
+    mocked.assert_not_called()
+
+
+def test_aggregate_unknown_calls_each_reserve_an_output_ceiling():
+    budget = TurnBudget(step_limit=25)
+    budget.observe_usage({'estimated_input_tokens':200,'unreported_calls':2},completion_reserve=8192,phase='review')
+    assert budget.estimated_usage == 200 + 2*8192
+
+
+def test_executor_stops_after_review_recovery_and_accounts_once(monkeypatch,tmp_path):
+    from apsara_cli.engine import critic,llm
+    from unittest.mock import AsyncMock
+    mocked=AsyncMock(side_effect=[({'content':''},{'total_tokens':20}),({'content':''},{'total_tokens':30})])
+    monkeypatch.setattr(llm,'call_llm',mocked)
+    monkeypatch.setattr(llm,'estimate_request_tokens',lambda *a,**kw:100)
+    monkeypatch.setattr(critic,'_read_only_context',lambda *a:'COMPLETE DIFF')
+    actions=[BASE,WRITE,[('write_to_file',{'path':'b.py','content':'fixed'})],FULL,[('request_critic',{})],None]
+    events,calls,requests=_drive(monkeypatch,tmp_path,actions,actual_critic=True)
+    run=latest_run(tmp_path)
+    assert mocked.await_count==2 and len(requests)==5
+    assert run['state']=='blocked' and run['critic_status']=='unavailable'
+    assert run['budget']['reported_usage']==100  # Five primary calls plus both reviews, once each.
+    assert run['budget']['review_attempts']==2
+    assert events[-1]['type']=='blocked' and 'bounded recovery' in events[-1]['message']
+    assert (tmp_path/'a.py').read_text()=='fixed' and (tmp_path/'b.py').read_text()=='fixed'
