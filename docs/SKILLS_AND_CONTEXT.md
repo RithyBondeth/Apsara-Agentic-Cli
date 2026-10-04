@@ -149,14 +149,19 @@ Within the default 100,000-token turn, requests have cumulative phase allowances
 20,000 for exploration, 30,000 for implementation, 10,000 for verification,
 30,000 for review, and 10,000 for finishing. They scale with the overall token
 limit. Unused allowances do not fund additional exploration or implementation;
-revisiting a phase does not reset its usage. Targeted reads during implementation
+revisiting a phase does not reset its usage. Finishing can use otherwise unused
+funds after current checks and required review; proposed edits or review calls
+are charged to their own phases before tools execute. Targeted reads during implementation
 count toward implementation. Provider and tool-call limits still apply equally
 in optimized and reference runs. `/budget`, the sidebar, and saved reports show
 phase usage including conservative reservations.
 
 The runtime moves from exploration to implementation as exploration approaches
 its limit. Source edits reopen implementation, failed checks require repairs,
-and current full checks lead to required review and finishing. Before sending
+and current full checks lead to required review and finishing. When an edited
+implementation cannot fit another request, its editing allowance closes and the
+runtime guides the model to use reserved full verification. That allowance
+cannot fund further edits. Before sending
 another request, the runtime checks both phase and overall headroom. Protected
 instructions and requirements are never shortened just to fit a phase. A task
 that cannot fit is blocked with preserved edits. Below 32,768 turn tokens,

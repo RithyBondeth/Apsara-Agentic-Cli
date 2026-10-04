@@ -275,7 +275,9 @@ estimates cannot guarantee a provider billing cap. Passing checks and unchanged
 covered file reads are reused while their evidence is current; later changes
 still invalidate verification and review. Earlier exchanges are trimmed sooner
 as the turn allowance shrinks, while required instructions and the latest
-request remain protected.
+request remain protected. Phase allowances protect verification and finishing;
+review recovery has at most two provider attempts for unchanged source and policy.
+See the phase and successful-work comparison details in the skills/context guide.
 
 ## Lifecycle hooks
 

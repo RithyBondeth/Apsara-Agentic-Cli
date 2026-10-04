@@ -521,7 +521,10 @@ def _sidebar_text(
             phase = budget["phase"]
             spent = budget.get("phase_spent", {}).get(phase, 0)
             limit = budget.get("phase_limits", {}).get(phase, budget["usage_limit"])
-            lines(f"   {phase.title()} · {spent:,}/{limit:,} tokens")
+            if phase == "finish":
+                lines(f"   Finish · {spent:,} used · {budget.get('phase_available', 0):,} available")
+            else:
+                lines(f"   {phase.title()} · {spent:,}/{limit:,} tokens")
         lines("")
 
     # Model: name, provider · tier, context window, key status.

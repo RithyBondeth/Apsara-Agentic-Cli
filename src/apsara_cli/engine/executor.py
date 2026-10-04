@@ -138,6 +138,8 @@ def _progress_message(run, budget, baseline, verified, reviewed, requires_review
         next_action = "Full verification is current. Call request_critic next; address concrete findings, then finish."
     elif run.verification_status == "unavailable":
         next_action = "No usable verifier is available. Complete the requested work and report the verification limitation."
+    elif budget.implementation_closed and run.changed_files:
+        next_action = "Implementation allowance is closed. Run full verification on the preserved changes; report a blocker if requirements remain."
     elif run.changed_files:
         next_action = "Complete remaining requirements, then call verify_project with phase=full."
     else:
@@ -428,6 +430,10 @@ async def _run_agent_stream(
                     budget.phase = "implement"
                     # Rebuild context and progress under the new allowance.
                     continue
+                if budget.phase == "implement" and changed_workspace and not budget.implementation_closed:
+                    budget.implementation_closed = True
+                    budget.phase = "verify"
+                    continue
                 reason = ("Turn token budget cannot fit another request; changes are preserved for review."
                           if not budget.request_fits(prepared.tokens, DEFAULT_MAX_COMPLETION_TOKENS) else
                           f"The {budget.phase} phase allowance cannot fit another request; changes are preserved for review.")
@@ -533,10 +539,37 @@ async def _run_agent_stream(
                 "unreported_calls": 1,
             }
         usage["apsara_model"] = active_model
+        # Charge the actual requested work rather than the predicted next
+        # action: optional reviews and late edits must not consume final-answer
+        # reservations merely because full verification already passed.
+        requested = {call["function"]["name"] for call in tool_calls or []}
+        verification_requested = False
+        for call in tool_calls or []:
+            if call["function"]["name"] != "verify_project":
+                continue
+            try:
+                arguments = json.loads(call["function"]["arguments"])
+                verification_requested |= arguments.get("phase", "full") != "baseline"
+            except (ValueError, TypeError, AttributeError):
+                pass
+        if requested & (mutation_tools | {"run_bash_command", "start_process"}):
+            budget.phase = "implement"
+        elif "request_critic" in requested:
+            budget.phase = "review"
+        elif verification_requested:
+            budget.phase = "verify"
+        elif tool_calls and budget.phase in {"review", "finish"}:
+            budget.phase = "implement"
         budget.observe_usage(usage)
         run.budget = budget.as_dict()
         yield json.dumps({"type": "usage", "data": usage})
         yield json.dumps({"type": "budget", "data": run.budget})
+        if tool_calls and budget.phase_spent.get(budget.phase, 0) > budget.phase_limits[budget.phase]:
+            reason = f"The {budget.phase} phase allowance is exhausted; pending tools were not executed. Changes are preserved."
+            run.completion_reason = reason
+            journal.transition(AgentRunState.BLOCKED, reason)
+            yield json.dumps({"type": "blocked", "message": reason})
+            return
         if tool_calls and not budget.remaining_usage:
             reason = "Turn token budget exhausted; pending tool calls were not executed."
             run.completion_reason = reason
@@ -666,6 +699,8 @@ async def _run_agent_stream(
                 mutation_applied = False
                 if not before_hook.allowed:
                     tool_result_str = f"Error: Blocked by {hook_event} hook: {before_hook.reason}"
+                elif tool_name in mutation_tools | {"run_bash_command", "start_process"} and budget.implementation_closed:
+                    tool_result_str = "Error: Implementation allowance is closed. Verify the preserved changes or report remaining work; do not borrow verification funds for edits."
                 elif tool_name in mutation_tools | {"run_bash_command", "start_process"} and not changed_workspace and not baseline_attempted:
                     tool_result_str = (
                         "Error: Run verify_project with phase=baseline before the first workspace edit. "

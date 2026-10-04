@@ -428,7 +428,7 @@ def test_phase_budgets_follow_verification_and_reopen_after_edit(monkeypatch, tm
     assert latest_run(tmp_path)['state'] == 'completed_verified'
     budget = latest_run(tmp_path)['budget']
     assert budget['phase_spent']['review'] == 20
-    assert budget['phase_spent']['finish'] == 20  # An edit after review invalidates earlier evidence.
+    assert budget['phase_spent']['finish'] == 10  # Late edits use implementation, not the final-answer reserve.
     assert budget['phase_spent']['implement'] >= 20
     assert budget['phase'] == 'finish'
 
@@ -578,3 +578,46 @@ def test_executor_stops_after_review_recovery_and_accounts_once(monkeypatch,tmp_
     assert run['budget']['review_attempts']==2
     assert events[-1]['type']=='blocked' and 'bounded recovery' in events[-1]['message']
     assert (tmp_path/'a.py').read_text()=='fixed' and (tmp_path/'b.py').read_text()=='fixed'
+
+
+def test_optional_review_does_not_spend_final_answer_allowance(monkeypatch,tmp_path):
+    events,_,_=_drive(monkeypatch,tmp_path,[BASE,WRITE,FULL,[('request_critic',{})],None],usage=4000)
+    saved=latest_run(tmp_path)
+    assert saved['state']=='completed_verified'
+    assert saved['budget']['phase_spent']['review']==4000
+    assert saved['budget']['phase_spent']['finish']==4000
+    assert saved['budget']['phase_spent']['verify']==4000
+
+
+def test_closed_implementation_can_use_reserved_full_verification(monkeypatch,tmp_path):
+    reads=[[('read_file_lines',{'path':'a.py','start_line':i,'end_line':i})] for i in range(1,5)]
+    events,_,_=_drive(monkeypatch,tmp_path,[BASE,WRITE]+reads+[FULL,None],usage=6000)
+    saved=latest_run(tmp_path)
+    assert saved['budget']['implementation_closed']
+    assert saved['state']=='completed_verified'
+    assert saved['budget']['phase_spent']['implement']==30000
+    assert saved['budget']['phase_spent']['verify']==6000
+    assert saved['budget']['phase_spent']['finish']==6000
+
+
+def test_verification_reserve_cannot_fund_more_edits(monkeypatch,tmp_path):
+    reads=[[('read_file_lines',{'path':'a.py','start_line':i,'end_line':i})] for i in range(1,5)]
+    more=[('write_to_file',{'path':'b.py','content':'must not be written'})]
+    events,_,_=_drive(monkeypatch,tmp_path,[BASE,WRITE]+reads+[more],usage=6000)
+    assert events[-1]['type']=='blocked'
+    assert not (tmp_path/'b.py').exists()
+    assert latest_run(tmp_path)['budget']['implementation_closed']
+
+
+def test_finishing_can_use_unused_funds_without_expanding_implementation():
+    budget=TurnBudget(step_limit=25,reported_usage=60_000,phase_spent={'finish':5000,'implement':30000})
+    assert budget.request_fits(8000,4096,phase='finish')
+    assert not budget.request_fits(8000,4096,phase='implement')
+    assert not budget.request_fits(40_000,4096,phase='finish')
+
+
+def test_final_answer_with_larger_tool_overhead_uses_unused_finish_funds(monkeypatch,tmp_path):
+    events,_,_=_drive(monkeypatch,tmp_path,[BASE,WRITE,FULL,[('request_critic',{})],None],
+        usage=100,estimate=lambda *a,**kw:8000)
+    assert latest_run(tmp_path)['state']=='completed_verified'
+    assert latest_run(tmp_path)['budget']['phase_spent']['finish']==100

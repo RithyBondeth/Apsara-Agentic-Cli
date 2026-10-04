@@ -31,6 +31,7 @@ class TurnBudget:
     phase: str = "explore"
     phase_spent: dict[str, int] = field(default_factory=dict)
     review_attempts: int = 0
+    implementation_closed: bool = False
     _review_attempts: dict[str, int] = field(default_factory=dict, repr=False)
 
     @property
@@ -45,6 +46,11 @@ class TurnBudget:
         return limits
 
     def remaining_for(self, phase: str) -> int:
+        if phase == "finish":
+            # Only the executor's verified finishing stage can use otherwise
+            # unused funds. Proposed edits/reviews are charged back to their
+            # own phases before any tool executes.
+            return self.remaining_usage
         return min(self.remaining_usage, max(0, self.phase_limits[phase] - self.phase_spent.get(phase, 0)))
 
     @classmethod
@@ -80,7 +86,7 @@ class TurnBudget:
 
     def as_dict(self) -> dict:
         return {**{k: v for k, v in vars(self).items() if not k.startswith("_")},
-                "phase_limits": self.phase_limits}
+                "phase_limits": self.phase_limits, "phase_available": self.remaining_for(self.phase)}
 
 
 _ACTIVE: ContextVar[TurnBudget | None] = ContextVar("apsara_turn_budget", default=None)
