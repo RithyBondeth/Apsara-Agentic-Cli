@@ -10,7 +10,7 @@ iteration does not certify their live coding behavior.
 
 | Connection | Evidence in this iteration |
 | --- | --- |
-| OpenCode / Space Bunny Free | Final repeated core: 12/15; pinned optimized: 2/6, reference: 1/6; completion remains unstable. Recovery and local MCP probe passed. See the completion validation report |
+| OpenCode / Space Bunny Free | Live runtime `32ed04c`: Node 3/3, multi-file Python 1/3; pinned optimized/reference 0/6 and 1/6. No matched successful pairs or demonstrated token savings. Final fresh-review safety fix has offline coverage only. See [phase/recovery validation](PHASE_RECOVERY_VALIDATION_2026-10-04.md). Earlier evidence is retained by runtime. |
 | Other OpenCode Zen models | Endpoint/key routing regression coverage; no live coding certification |
 | OpenAI, Anthropic, Gemini, Groq, Mistral, DeepSeek | Offline adapter and runtime coverage only; no new live coding trials |
 | Ollama | Local adapter available; no local model connected for this validation |

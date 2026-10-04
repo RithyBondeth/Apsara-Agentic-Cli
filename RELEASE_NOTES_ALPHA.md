@@ -28,18 +28,29 @@ Status: prepared locally; no release tag, GitHub release, or PyPI publication.
   agent-suggested extra cases are not accepted as additional requirements.
   Model review may still make scope or correctness errors.
 
+- Phase allowances protect checking, review, and finishing within the same
+  overall turn limits. Unused exploration funds can support implementation.
+- Missing review verdicts and timeouts have bounded recovery; a failed fresh
+  review invalidates an older approval. Material findings still block completion.
+- Efficiency reports match successfully verified repairs and count failed
+  attempts in cost per completion. Incomplete usage stays explicitly unknown.
+
 ## Validation
 
 Current live and artifact evidence is documented in
-`docs/COMPLETION_VALIDATION_2026-10-04.md`. Only OpenCode's free model is included
+`docs/PHASE_RECOVERY_VALIDATION_2026-10-04.md`. Only OpenCode's free model is included
 in live provider testing. Other provider adapters have offline coverage and
 remain uncertified for live coding; see `docs/PROVIDER_VALIDATION.md`.
 
-529 local tests and all 18 runtime CI jobs passed. Final free-model trials
-passed 12/15 core tasks, 2/6 optimized pinned-repository tasks, and
-1/6 reference tasks. Repeated completion remains unstable, so production
-quality gates are not met. Live saved-session recovery, undo, and a local
-read-only MCP round-trip passed; these are limited integration samples.
+556 local tests and all 18 runtime CI jobs passed on `44a146d`.
+Live repeats ran on preceding runtime `32ed04c`; the final fresh-review
+safety fix has regression coverage but was not included in that live matrix.
+The subsequent focused free-model repeat passed 4/6 Node/multi-file trials;
+pinned optimized/reference trials passed 0/6 and 1/6.
+See `docs/PHASE_RECOVERY_VALIDATION_2026-10-04.md` for actual stability gates,
+complete/incomplete usage, and successful-work comparisons. Earlier full core,
+recovery, and local MCP evidence is retained on its exact preceding runtimes.
+No other provider or language runtime is newly certified by this focused repeat.
 
 ## Install the candidate
 

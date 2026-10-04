@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "sample_counts": {
+    "optimized": 6,
+    "reference": 6
+  },
+  "pass_rate": {
+    "optimized": 0.1667,
+    "reference": 0.1667
+  },
+  "latency_seconds": {
+    "optimized": {
+      "value": 99.671,
+      "variance": 4251.217,
+      "sample_count": 6,
+      "status": "measured"
+    },
+    "reference": {
+      "value": 34.263,
+      "variance": 192.898,
+      "sample_count": 6,
+      "status": "measured"
+    }
+  },
+  "total_tokens": {
+    "optimized": {
+      "value": 52962.5,
+      "variance": 253655654.25,
+      "sample_count": 6,
+      "status": "measured"
+    },
+    "reference": {
+      "value": 40802,
+      "variance": 120207928.667,
+      "sample_count": 6,
+      "status": "measured"
+    }
+  },
+  "unknown_usage_trials": {
+    "optimized": 0,
+    "reference": 0
+  },
+  "outcomes": {
+    "optimized": {
+      "verified_success_rate": 0.6667,
+      "false_completion_trials": 0,
+      "unexpected_edit_trials": 0
+    },
+    "reference": {
+      "verified_success_rate": 0.1667,
+      "false_completion_trials": 0,
+      "unexpected_edit_trials": 0
+    }
+  },
+  "successful_work": {
+    "optimized": {
+      "completed_trials": 1,
+      "measured_completed_trials": 1,
+      "total_tokens": {
+        "value": 39820,
+        "variance": 0,
+        "sample_count": 1,
+        "status": "measured"
+      },
+      "latency_seconds": {
+        "value": 70.172,
+        "variance": 0.0,
+        "sample_count": 1,
+        "status": "measured"
+      },
+      "all_trial_tokens_per_completion": 317775.0
+    },
+    "reference": {
+      "completed_trials": 1,
+      "measured_completed_trials": 1,
+      "total_tokens": {
+        "value": 62979,
+        "variance": 0,
+        "sample_count": 1,
+        "status": "measured"
+      },
+      "latency_seconds": {
+        "value": 59.484,
+        "variance": 0.0,
+        "sample_count": 1,
+        "status": "measured"
+      },
+      "all_trial_tokens_per_completion": 244812.0
+    }
+  },
+  "matched_successful_work": {
+    "sample_count": 1,
+    "pairs": [
+      {
+        "case": "boltons-chunk-contract",
+        "trial": 3,
+        "optimized_tokens": 39820,
+        "reference_tokens": 62979
+      }
+    ],
+    "optimized_tokens": {
+      "value": 39820,
+      "variance": 0,
+      "sample_count": 1,
+      "status": "measured"
+    },
+    "reference_tokens": {
+      "value": 62979,
+      "variance": 0,
+      "sample_count": 1,
+      "status": "measured"
+    },
+    "observed_savings_percent": 36.773,
+    "status": "insufficient_repeated_samples",
+    "scope": "Successful, constrained, independently verified repairs with complete usage; matched by case and trial. Not a general causal claim."
+  },
+  "quality_claim": "pass rates are reported; no quality improvement is claimed without comparable measured samples"
+}

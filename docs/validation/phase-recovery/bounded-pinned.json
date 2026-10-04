@@ -1,0 +1,775 @@
+{
+  "schema_version": 2,
+  "suite": "apsara-pinned-repository-regressions",
+  "suite_digest": "e5608f0b413ebbb8d49823cabff28abea750285ed32fe14acfff0d3813ca3838",
+  "model": "bunny",
+  "created_at": "2026-10-04T15:19:29.680323+00:00",
+  "repeat_count": 3,
+  "aggregate": {
+    "passed": false,
+    "thresholds": {
+      "min_pass_rate": 1.0,
+      "max_verification_flaky_trials": 0,
+      "max_unstable_cases": 0,
+      "max_unsafe_trials": 0
+    },
+    "trials": 12,
+    "passed_trials": 2,
+    "pass_rate": 0.1667,
+    "verification_flaky_trials": 0,
+    "unstable_cases": 1,
+    "unsafe_trials": 0,
+    "scores": {
+      "average": 49.5833,
+      "variance": 1247.7431,
+      "minimum": 20,
+      "maximum": 100
+    },
+    "tool_calls": {
+      "average": 10.8333,
+      "variance": 9.8056,
+      "minimum": 6,
+      "maximum": 16
+    },
+    "tokens": {
+      "average": 46882.25,
+      "variance": 223901231.5208,
+      "minimum": 27690,
+      "maximum": 81459,
+      "sample_count": 12,
+      "unknown_trials": 0
+    },
+    "failure_categories": {
+      "agent_state": 10,
+      "no_changes": 7,
+      "unstable_case": 1,
+      "verification_failed": 7
+    },
+    "cases": [
+      {
+        "name": "boltons-chunk-contract",
+        "language": "python",
+        "trials": 6,
+        "passed_trials": 2,
+        "pass_rate": 0.3333,
+        "average_score": 46.6667,
+        "unstable": true
+      },
+      {
+        "name": "more-itertools-shared-chunk-contract",
+        "language": "python",
+        "trials": 6,
+        "passed_trials": 0,
+        "pass_rate": 0.0,
+        "average_score": 52.5,
+        "unstable": false
+      }
+    ]
+  },
+  "runtime_commit": "4646193007153dfd95d4e10ac0b2030059217090",
+  "source_digest": "8ee7a48c62025628bbeb220e6c39481acbdb4010f1de84973394fb87036a5fcd",
+  "limits": {
+    "steps": 25,
+    "tool_calls": 50,
+    "tokens": 100000
+  },
+  "phase_limits": {
+    "explore": 20000,
+    "implement": 30000,
+    "verify": 10000,
+    "review": 30000,
+    "finish": 10000
+  },
+  "phase_handoff": "Verification can use unused exploration and implementation funds from their shared work pool; it reduces subsequent implementation headroom and preserves review/finishing reserves. Verified finishing can use otherwise unused funds; edits and reviews are charged to their own phases.",
+  "dependencies": {
+    "apsara-agentic": "0.1.0a2",
+    "litellm": "1.104.0",
+    "openai": "2.54.0",
+    "mcp": "2.3.0"
+  },
+  "source_unchanged_through_run": true,
+  "cases": [
+    {
+      "name": "boltons-chunk-contract",
+      "trial": 1,
+      "profile": "optimized",
+      "agent_state": "blocked",
+      "changed_files": [],
+      "unexpected_changes": [],
+      "tool_calls": 12,
+      "usage": {
+        "prompt_tokens": 36847,
+        "completion_tokens": 3332,
+        "total_tokens": 40179,
+        "cached_tokens": 3854,
+        "cache_creation_tokens": 0,
+        "reasoning_tokens": 2748,
+        "estimated_input_tokens": 0,
+        "provider_reported_calls": 8,
+        "unreported_calls": 0,
+        "interrupted_calls": 0,
+        "auxiliary_calls": 0
+      },
+      "usage_complete": true,
+      "latency_seconds": 52.247,
+      "baseline_failed": true,
+      "baseline_verification_flaky": false,
+      "verification_flaky": false,
+      "turn_budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 9,
+        "tool_calls_used": 12,
+        "reported_usage": 40179,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "implement",
+        "phase_spent": {
+          "explore": 16987,
+          "implement": 23192
+        },
+        "review_attempts": 0,
+        "implementation_closed": false,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        },
+        "phase_available": 6808,
+        "phase_current_limit": 30000
+      },
+      "independent_verification_passed": false
+    },
+    {
+      "name": "boltons-chunk-contract",
+      "trial": 1,
+      "profile": "reference",
+      "agent_state": "blocked",
+      "changed_files": [],
+      "unexpected_changes": [],
+      "tool_calls": 6,
+      "usage": {
+        "prompt_tokens": 32499,
+        "completion_tokens": 775,
+        "total_tokens": 33274,
+        "cached_tokens": 808,
+        "cache_creation_tokens": 0,
+        "reasoning_tokens": 564,
+        "estimated_input_tokens": 0,
+        "provider_reported_calls": 4,
+        "unreported_calls": 0,
+        "interrupted_calls": 0,
+        "auxiliary_calls": 0
+      },
+      "usage_complete": true,
+      "latency_seconds": 19.587,
+      "baseline_failed": true,
+      "baseline_verification_flaky": false,
+      "verification_flaky": false,
+      "turn_budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 5,
+        "tool_calls_used": 6,
+        "reported_usage": 33274,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "implement",
+        "phase_spent": {
+          "explore": 5222,
+          "implement": 28052
+        },
+        "review_attempts": 0,
+        "implementation_closed": false,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        },
+        "phase_available": 1948,
+        "phase_current_limit": 30000
+      },
+      "independent_verification_passed": false
+    },
+    {
+      "name": "boltons-chunk-contract",
+      "trial": 2,
+      "profile": "reference",
+      "agent_state": "blocked",
+      "changed_files": [],
+      "unexpected_changes": [],
+      "tool_calls": 9,
+      "usage": {
+        "prompt_tokens": 37290,
+        "completion_tokens": 2899,
+        "total_tokens": 40189,
+        "cached_tokens": 6137,
+        "cache_creation_tokens": 0,
+        "reasoning_tokens": 2544,
+        "estimated_input_tokens": 0,
+        "provider_reported_calls": 5,
+        "unreported_calls": 0,
+        "interrupted_calls": 0,
+        "auxiliary_calls": 0
+      },
+      "usage_complete": true,
+      "latency_seconds": 35.039,
+      "baseline_failed": true,
+      "baseline_verification_flaky": false,
+      "verification_flaky": false,
+      "turn_budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 6,
+        "tool_calls_used": 9,
+        "reported_usage": 40189,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "implement",
+        "phase_spent": {
+          "explore": 12343,
+          "implement": 27846
+        },
+        "review_attempts": 0,
+        "implementation_closed": false,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        },
+        "phase_available": 2154,
+        "phase_current_limit": 30000
+      },
+      "independent_verification_passed": false
+    },
+    {
+      "name": "boltons-chunk-contract",
+      "trial": 2,
+      "profile": "optimized",
+      "agent_state": "blocked",
+      "changed_files": [],
+      "unexpected_changes": [],
+      "tool_calls": 11,
+      "usage": {
+        "prompt_tokens": 35374,
+        "completion_tokens": 2163,
+        "total_tokens": 37537,
+        "cached_tokens": 3532,
+        "cache_creation_tokens": 0,
+        "reasoning_tokens": 1742,
+        "estimated_input_tokens": 0,
+        "provider_reported_calls": 6,
+        "unreported_calls": 0,
+        "interrupted_calls": 0,
+        "auxiliary_calls": 0
+      },
+      "usage_complete": true,
+      "latency_seconds": 39.386,
+      "baseline_failed": true,
+      "baseline_verification_flaky": false,
+      "verification_flaky": false,
+      "turn_budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 7,
+        "tool_calls_used": 11,
+        "reported_usage": 37537,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "implement",
+        "phase_spent": {
+          "explore": 13663,
+          "implement": 23874
+        },
+        "review_attempts": 0,
+        "implementation_closed": false,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        },
+        "phase_available": 6126,
+        "phase_current_limit": 30000
+      },
+      "independent_verification_passed": false
+    },
+    {
+      "name": "boltons-chunk-contract",
+      "trial": 3,
+      "profile": "optimized",
+      "agent_state": "completed_verified",
+      "changed_files": [
+        "boltons/iterutils.py"
+      ],
+      "unexpected_changes": [],
+      "tool_calls": 10,
+      "usage": {
+        "prompt_tokens": 36595,
+        "completion_tokens": 3225,
+        "total_tokens": 39820,
+        "cached_tokens": 3328,
+        "cache_creation_tokens": 0,
+        "reasoning_tokens": 2155,
+        "estimated_input_tokens": 0,
+        "provider_reported_calls": 7,
+        "unreported_calls": 0,
+        "interrupted_calls": 0,
+        "auxiliary_calls": 0
+      },
+      "usage_complete": true,
+      "latency_seconds": 70.172,
+      "baseline_failed": true,
+      "baseline_verification_flaky": false,
+      "verification_flaky": false,
+      "turn_budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 7,
+        "tool_calls_used": 10,
+        "reported_usage": 39820,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "finish",
+        "phase_spent": {
+          "explore": 17215,
+          "implement": 7539,
+          "verify": 7135,
+          "finish": 7931
+        },
+        "review_attempts": 0,
+        "implementation_closed": false,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        },
+        "phase_available": 60180,
+        "phase_current_limit": 68111
+      },
+      "independent_verification_passed": true
+    },
+    {
+      "name": "boltons-chunk-contract",
+      "trial": 3,
+      "profile": "reference",
+      "agent_state": "completed_verified",
+      "changed_files": [
+        "boltons/iterutils.py"
+      ],
+      "unexpected_changes": [],
+      "tool_calls": 10,
+      "usage": {
+        "prompt_tokens": 60642,
+        "completion_tokens": 2337,
+        "total_tokens": 62979,
+        "cached_tokens": 5908,
+        "cache_creation_tokens": 0,
+        "reasoning_tokens": 1736,
+        "estimated_input_tokens": 0,
+        "provider_reported_calls": 8,
+        "unreported_calls": 0,
+        "interrupted_calls": 0,
+        "auxiliary_calls": 0
+      },
+      "usage_complete": true,
+      "latency_seconds": 59.484,
+      "baseline_failed": true,
+      "baseline_verification_flaky": false,
+      "verification_flaky": false,
+      "turn_budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 8,
+        "tool_calls_used": 10,
+        "reported_usage": 62979,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "finish",
+        "phase_spent": {
+          "explore": 17743,
+          "implement": 26363,
+          "verify": 9186,
+          "finish": 9687
+        },
+        "review_attempts": 0,
+        "implementation_closed": true,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        },
+        "phase_available": 37021,
+        "phase_current_limit": 46708
+      },
+      "independent_verification_passed": true
+    },
+    {
+      "name": "more-itertools-shared-chunk-contract",
+      "trial": 1,
+      "profile": "optimized",
+      "agent_state": "blocked",
+      "changed_files": [
+        "more_itertools/more.py",
+        "more_itertools/recipes.py"
+      ],
+      "unexpected_changes": [],
+      "tool_calls": 16,
+      "usage": {
+        "prompt_tokens": 52502,
+        "completion_tokens": 1732,
+        "total_tokens": 54234,
+        "cached_tokens": 1462,
+        "cache_creation_tokens": 0,
+        "reasoning_tokens": 833,
+        "estimated_input_tokens": 0,
+        "provider_reported_calls": 11,
+        "unreported_calls": 0,
+        "interrupted_calls": 0,
+        "auxiliary_calls": 0
+      },
+      "usage_complete": true,
+      "latency_seconds": 55.084,
+      "baseline_failed": true,
+      "baseline_verification_flaky": false,
+      "verification_flaky": false,
+      "turn_budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 12,
+        "tool_calls_used": 16,
+        "reported_usage": 54234,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "verify",
+        "phase_spent": {
+          "explore": 16566,
+          "implement": 26951,
+          "verify": 10717
+        },
+        "review_attempts": 0,
+        "implementation_closed": true,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        },
+        "phase_available": 5766,
+        "phase_current_limit": 16483
+      },
+      "independent_verification_passed": true
+    },
+    {
+      "name": "more-itertools-shared-chunk-contract",
+      "trial": 1,
+      "profile": "reference",
+      "agent_state": "blocked",
+      "changed_files": [],
+      "unexpected_changes": [],
+      "tool_calls": 6,
+      "usage": {
+        "prompt_tokens": 27386,
+        "completion_tokens": 304,
+        "total_tokens": 27690,
+        "cached_tokens": 972,
+        "cache_creation_tokens": 0,
+        "reasoning_tokens": 96,
+        "estimated_input_tokens": 0,
+        "provider_reported_calls": 4,
+        "unreported_calls": 0,
+        "interrupted_calls": 0,
+        "auxiliary_calls": 0
+      },
+      "usage_complete": true,
+      "latency_seconds": 17.26,
+      "baseline_failed": true,
+      "baseline_verification_flaky": false,
+      "verification_flaky": false,
+      "turn_budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 5,
+        "tool_calls_used": 6,
+        "reported_usage": 27690,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "implement",
+        "phase_spent": {
+          "explore": 5042,
+          "implement": 22648
+        },
+        "review_attempts": 0,
+        "implementation_closed": false,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        },
+        "phase_available": 7352,
+        "phase_current_limit": 30000
+      },
+      "independent_verification_passed": false
+    },
+    {
+      "name": "more-itertools-shared-chunk-contract",
+      "trial": 2,
+      "profile": "reference",
+      "agent_state": "blocked",
+      "changed_files": [],
+      "unexpected_changes": [],
+      "tool_calls": 9,
+      "usage": {
+        "prompt_tokens": 39568,
+        "completion_tokens": 649,
+        "total_tokens": 40217,
+        "cached_tokens": 1538,
+        "cache_creation_tokens": 0,
+        "reasoning_tokens": 255,
+        "estimated_input_tokens": 0,
+        "provider_reported_calls": 5,
+        "unreported_calls": 0,
+        "interrupted_calls": 0,
+        "auxiliary_calls": 0
+      },
+      "usage_complete": true,
+      "latency_seconds": 37.28,
+      "baseline_failed": true,
+      "baseline_verification_flaky": false,
+      "verification_flaky": false,
+      "turn_budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 6,
+        "tool_calls_used": 9,
+        "reported_usage": 40217,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "implement",
+        "phase_spent": {
+          "explore": 12440,
+          "implement": 27777
+        },
+        "review_attempts": 0,
+        "implementation_closed": false,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        },
+        "phase_available": 2223,
+        "phase_current_limit": 30000
+      },
+      "independent_verification_passed": false
+    },
+    {
+      "name": "more-itertools-shared-chunk-contract",
+      "trial": 2,
+      "profile": "optimized",
+      "agent_state": "blocked",
+      "changed_files": [
+        "more_itertools/more.py",
+        "more_itertools/recipes.py"
+      ],
+      "unexpected_changes": [],
+      "tool_calls": 15,
+      "usage": {
+        "prompt_tokens": 70419,
+        "completion_tokens": 11040,
+        "total_tokens": 81459,
+        "cached_tokens": 4099,
+        "cache_creation_tokens": 0,
+        "reasoning_tokens": 9684,
+        "estimated_input_tokens": 0,
+        "provider_reported_calls": 9,
+        "unreported_calls": 0,
+        "interrupted_calls": 0,
+        "auxiliary_calls": 1
+      },
+      "usage_complete": true,
+      "latency_seconds": 201.544,
+      "baseline_failed": true,
+      "baseline_verification_flaky": false,
+      "verification_flaky": false,
+      "turn_budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 8,
+        "tool_calls_used": 15,
+        "reported_usage": 81459,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "implement",
+        "phase_spent": {
+          "explore": 16277,
+          "implement": 31379,
+          "verify": 13393,
+          "review": 20410
+        },
+        "review_attempts": 1,
+        "implementation_closed": true,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        },
+        "phase_available": 0,
+        "phase_current_limit": 30000
+      },
+      "independent_verification_passed": true
+    },
+    {
+      "name": "more-itertools-shared-chunk-contract",
+      "trial": 3,
+      "profile": "optimized",
+      "agent_state": "blocked",
+      "changed_files": [
+        "more_itertools/more.py",
+        "more_itertools/recipes.py"
+      ],
+      "unexpected_changes": [],
+      "tool_calls": 15,
+      "usage": {
+        "prompt_tokens": 54897,
+        "completion_tokens": 9649,
+        "total_tokens": 64546,
+        "cached_tokens": 2216,
+        "cache_creation_tokens": 0,
+        "reasoning_tokens": 8293,
+        "estimated_input_tokens": 0,
+        "provider_reported_calls": 11,
+        "unreported_calls": 0,
+        "interrupted_calls": 0,
+        "auxiliary_calls": 1
+      },
+      "usage_complete": true,
+      "latency_seconds": 179.594,
+      "baseline_failed": true,
+      "baseline_verification_flaky": false,
+      "verification_flaky": false,
+      "turn_budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 10,
+        "tool_calls_used": 15,
+        "reported_usage": 64546,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "implement",
+        "phase_spent": {
+          "explore": 16189,
+          "implement": 31273,
+          "verify": 5187,
+          "review": 11897
+        },
+        "review_attempts": 1,
+        "implementation_closed": true,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        },
+        "phase_available": 0,
+        "phase_current_limit": 30000
+      },
+      "independent_verification_passed": true
+    },
+    {
+      "name": "more-itertools-shared-chunk-contract",
+      "trial": 3,
+      "profile": "reference",
+      "agent_state": "blocked",
+      "changed_files": [],
+      "unexpected_changes": [],
+      "tool_calls": 11,
+      "usage": {
+        "prompt_tokens": 38658,
+        "completion_tokens": 1805,
+        "total_tokens": 40463,
+        "cached_tokens": 681,
+        "cache_creation_tokens": 0,
+        "reasoning_tokens": 1402,
+        "estimated_input_tokens": 0,
+        "provider_reported_calls": 5,
+        "unreported_calls": 0,
+        "interrupted_calls": 0,
+        "auxiliary_calls": 0
+      },
+      "usage_complete": true,
+      "latency_seconds": 36.927,
+      "baseline_failed": true,
+      "baseline_verification_flaky": false,
+      "verification_flaky": false,
+      "turn_budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 6,
+        "tool_calls_used": 11,
+        "reported_usage": 40463,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "implement",
+        "phase_spent": {
+          "explore": 12361,
+          "implement": 28102
+        },
+        "review_attempts": 0,
+        "implementation_closed": false,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        },
+        "phase_available": 1898,
+        "phase_current_limit": 30000
+      },
+      "independent_verification_passed": false
+    }
+  ]
+}

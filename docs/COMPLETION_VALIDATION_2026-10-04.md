@@ -1,5 +1,9 @@
 # Completion validation — 2026-10-04
 
+This report records the preceding runtime `84ebde5`. See
+[the subsequent phase/recovery validation](PHASE_RECOVERY_VALIDATION_2026-10-04.md)
+for the latest candidate runtime and focused results.
+
 Candidate `0.1.0a2` remains unpublished. The implementation is stronger, but the
 free model has not met the stability gates for a production release. Every live
 call used OpenCode Space Bunny Free; paid fallbacks were disabled. The colorful
