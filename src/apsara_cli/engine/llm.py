@@ -155,7 +155,8 @@ def _is_malformed_tool_call(exc: Exception) -> bool:
 
 
 async def call_llm(
-    messages: list[dict], model: str = DEFAULT_MODEL, *, with_tools: bool = True
+    messages: list[dict], model: str = DEFAULT_MODEL, *, with_tools: bool = True,
+    max_completion_tokens: int = DEFAULT_MAX_COMPLETION_TOKENS,
 ) -> tuple[Any, Any]:
     """
     Send the conversation to LLM with configured tools via LiteLLM.
@@ -175,7 +176,7 @@ async def call_llm(
             litellm.acompletion(
                 model=resolved_model,
                 messages=messages,
-                max_tokens=completion_limit(model, DEFAULT_MAX_COMPLETION_TOKENS),
+                max_tokens=completion_limit(model, max_completion_tokens),
                 **request_options,
                 **provider_options,
             ),

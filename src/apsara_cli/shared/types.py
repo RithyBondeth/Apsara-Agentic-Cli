@@ -75,6 +75,7 @@ class AgentRun:
     completion_reason: Optional[str] = None
     verification_evidence: list[dict[str, Any]] = field(default_factory=list)
     critic_findings: list[dict[str, Any]] = field(default_factory=list)
+    budget: dict[str, Any] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, Any]:
         data = asdict(self)

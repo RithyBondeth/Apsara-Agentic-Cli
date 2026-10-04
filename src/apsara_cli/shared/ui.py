@@ -331,6 +331,8 @@ class ConsoleUI:
         self._session_uses_promotional_pricing: bool = False
         self._context_tokens: int = 0
         self._context_budget: int = 0
+        self._run_budget: dict[str, Any] = {}
+        self._budget_warning_shown = False
 
         self.spinner_message = "Apsara is working"
         self.spinner_stop_event = threading.Event()
@@ -1038,6 +1040,8 @@ class ConsoleUI:
         self._turn_outcome = ""
         self._thought_pending = True
         self._turn_started_at = time.monotonic()
+        self._run_budget = {}
+        self._budget_warning_shown = False
 
     def finish_turn(self, model_label: Optional[str] = None, mode: str = "Build") -> None:
         """Record turn details and surface only outcomes that need attention."""

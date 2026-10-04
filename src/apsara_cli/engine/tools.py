@@ -1496,7 +1496,7 @@ def code_diagnostics(path: str = "", project: bool = False) -> str:
 
 
 def verify_project(
-    phase: str = "full", isolated: bool = False, timeout: int = 0
+    phase: str = "full", isolated: bool = False, timeout: int = 0, fresh: bool = False
 ) -> str:
     """Run manifest-aware project checks and return structured evidence."""
     from apsara_cli.engine.verification import (
@@ -2023,6 +2023,7 @@ def get_agent_tools() -> list[Dict[str, Any]]:
                     "type": "integer",
                     "description": "Per-command timeout in seconds; zero uses the configured default.",
                 },
+                "fresh": {"type": "boolean", "description": "Execute again even if unchanged passing evidence exists; use for deliberate repeated or flaky checks."},
             },
         ),
         _tool_definition(
@@ -2038,6 +2039,7 @@ def get_agent_tools() -> list[Dict[str, Any]]:
                     "type": "string",
                     "description": "Specific plan, implementation, or test concern to review.",
                 },
+                "fresh": {"type": "boolean", "description": "Request a new independent review even if this request was already approved."},
             },
             ["objective"],
         ),
@@ -2172,7 +2174,7 @@ async def execute_tool_async(tool_name: str, arguments: Dict[str, Any]) -> str:
     Built-in tools stay synchronous; only remote calls need to await.
     """
     if tool_name == "request_critic":
-        from apsara_cli.engine.critic import request_critique
+        from apsara_cli.engine.critic import request_critique, CRITIC_MAX_COMPLETION_TOKENS
         content, usage = await request_critique(
             _workspace_root(),
             objective=str(arguments.get("objective") or "Review the current change"),
@@ -2181,11 +2183,17 @@ async def execute_tool_async(tool_name: str, arguments: Dict[str, Any]) -> str:
             changed_files=[str(item) for item in arguments.get("_changed_files", [])],
         )
         usage = dict(usage or {})
+        if usage.pop("request_skipped", False):
+            return content
+        usage_reported = bool(usage.get("total_tokens") or usage.get("prompt_tokens")
+                              or usage.get("completion_tokens") or usage.get("input_tokens")
+                              or usage.get("output_tokens"))
         usage.update({
             "apsara_model": _current_model(),
             "auxiliary_calls": 1,
-            "provider_reported_calls": 1 if usage else 0,
-            "unreported_calls": 0 if usage else 1,
+            "provider_reported_calls": 1 if usage_reported else 0,
+            "unreported_calls": 0 if usage_reported else 1,
+            "completion_reserve": CRITIC_MAX_COMPLETION_TOKENS,
         })
         _record_auxiliary_usage(usage)
         return content

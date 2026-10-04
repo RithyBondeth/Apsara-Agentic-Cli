@@ -130,7 +130,7 @@ def test_alpha_distribution_uses_pep440_prerelease_version():
     metadata = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     version = metadata["project"]["version"]
 
-    assert version == "0.1.0a1"
+    assert re.fullmatch(r"\d+\.\d+\.\d+a\d+", version)
     assert f"Version: `{version}`" in (ROOT / "RELEASE_NOTES_ALPHA.md").read_text(encoding="utf-8")
     assert (
         f"apsara_agentic-{version}-py3-none-any.whl"

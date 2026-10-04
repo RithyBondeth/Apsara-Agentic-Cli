@@ -6,6 +6,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+CRITIC_MAX_COMPLETION_TOKENS = 8192
+
 
 def _safe_review_paths(workspace: Path, paths: list[str] | None) -> list[str]:
     safe: list[str] = []
@@ -110,7 +112,8 @@ async def request_critique(
 
     policy = (
         "You are Apsara's independent read-only coding critic. You cannot call tools or modify files. "
-        "Find concrete correctness, security, maintainability, and test-coverage risks. "
+        "Find concrete correctness, security, maintainability, and test-coverage risks against the user objective. "
+        "Keep the review concise; avoid hypothetical requirements or stylistic changes. "
         'Return only JSON: {"verdict":"approved" or "changes_requested", "findings":'
         '[{"path":"relative/file", "description":"Concrete issue and consequence"}]}. '
         'Use approved only with an empty findings list. Any material unresolved issue requires changes_requested. '
@@ -122,14 +125,26 @@ async def request_critique(
         f"WORKSPACE EVIDENCE:\n{context}"
     )
     messages = [{"role": "system", "content": policy}, {"role": "user", "content": prompt}]
-    if estimate_request_tokens(messages, model=model, with_tools=False) > input_token_budget(model):
-        return "Error: Critic evidence exceeds this model's input budget. Use a model with a larger context window or narrow the change.", {}
+    estimate = estimate_request_tokens(messages, model=model, with_tools=False)
+    if estimate > input_token_budget(model):
+        return "Error: Critic evidence exceeds this model's input budget. Use a model with a larger context window or narrow the change.", {"request_skipped": True}
+    from apsara_cli.engine.budget import current_budget
+    from apsara_cli.engine.model_capabilities import completion_limit
+    budget = current_budget()
+    output_reserve = completion_limit(model, CRITIC_MAX_COMPLETION_TOKENS)
+    if budget and not budget.request_fits(estimate, output_reserve):
+        return "Error: Remaining turn token budget cannot fit the critic request. Changes remain unapproved.", {"request_skipped": True}
     message, usage = await call_llm(
-        messages, model=model, with_tools=False
+        messages, model=model, with_tools=False, max_completion_tokens=output_reserve
     )
+    usage = dict(usage or {})
+    if not usage:
+        usage = {"estimated_input_tokens": estimate, "unreported_calls": 1}
     content = _message_content(message).strip()
+    if content.startswith("Error:"):
+        return content, usage
     from apsara_cli.engine.evidence import critic_evidence
     verdict = critic_evidence(content)
     if verdict["verdict"] == "unavailable":
-        return f"Error: Critic review unavailable: {verdict.get('reason', 'No review')}", dict(usage or {})
-    return content, dict(usage or {})
+        return f"Error: Critic review unavailable: {verdict.get('reason', 'No review')}", usage
+    return content, usage

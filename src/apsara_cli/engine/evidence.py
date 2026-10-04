@@ -3,11 +3,21 @@
 from __future__ import annotations
 
 import json
+import re
+
+
+def _payload(text: str):
+    """Accept one JSON object, including a provider's Markdown code fence."""
+    text = text.strip()
+    fenced = re.fullmatch(r"```(?:json)?\s*\n(.*?)\n?```", text, flags=re.DOTALL | re.IGNORECASE)
+    if fenced:
+        text = fenced.group(1).strip()
+    return json.loads(text[text.index("{"):])
 
 
 def verification_evidence(text: str) -> dict:
     try:
-        payload = json.loads(text[text.index("{"):])
+        payload = _payload(text)
     except (ValueError, TypeError):
         return {"status": "failed", "reason": "No structured verification evidence."}
     if not isinstance(payload, dict) or payload.get("phase") not in {"baseline", "targeted", "full"}:
@@ -30,7 +40,7 @@ def critic_evidence(text: str) -> dict:
     if text.strip() == "APPROVED":
         return {"verdict": "approved", "findings": []}
     try:
-        payload = json.loads(text[text.index("{"):])
+        payload = _payload(text)
     except (ValueError, TypeError):
         return {"verdict": "unavailable", "findings": [], "reason": "Critic returned no structured verdict."}
     if not isinstance(payload, dict) or payload.get("verdict") not in {"approved", "changes_requested"}:

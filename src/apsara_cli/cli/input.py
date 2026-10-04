@@ -26,7 +26,7 @@ _ALL_PROVIDERS = _KEY_PROVIDERS + ["ollama"]
 _TOP_LEVEL = [
     "/help", "/details", "/clear", "/history", "/tools", "/skills", "/add", "/bug",
     "/status", "/model", "/models", "/key", "/session", "/save",
-    "/sessions", "/usage", "/diff", "/turns", "/undo-turn", "/checkpoints", "/undo", "/processes", "/logs", "/stop",
+    "/sessions", "/usage", "/budget", "/diff", "/turns", "/undo-turn", "/checkpoints", "/undo", "/processes", "/logs", "/stop",
     "/report", "/memory", "/exit", "/quit",
 ]
 

@@ -80,3 +80,46 @@ still exceeds the model-aware input budget, the run is blocked before another
 provider request. Token counts remain estimates; provider accounting is
 authoritative. Selective schemas and bounded output reduce request payloads,
 but model success rates and net token savings require live evaluation.
+
+## Per-turn limits and current evidence
+
+`/budget` shows model steps, requested tool calls, provider-reported tokens,
+reserved estimated usage, and reused results. The full-screen sidebar updates
+these values while the agent works. Both interfaces warn once at 80% of a
+limit. `/report` retains the final counters in the durable run report.
+
+Defaults are 25 model steps, 50 tool calls, and 100,000 total turn tokens.
+Set these in your shell before launching Apsara:
+
+```bash
+export APSARA_MAX_STEPS=25
+export APSARA_MAX_TOOL_CALLS=50
+export APSARA_MAX_TURN_TOKENS=100000
+```
+
+Workspace `.env` files cannot raise these limits. Tool batches stop before
+executing a call beyond the tool limit. Before another model or critic request,
+the runtime checks the estimated input plus its output reserve (4,096 tokens
+for the agent, up to 8,192 for the critic, constrained by model limits)
+against remaining usage. Unknown provider usage, including failed attempts before retries, stays separate
+from reported totals and reserves estimated input plus that output ceiling. This is a local
+resource limit, not a provider billing guarantee: token estimates can differ,
+and an in-flight response can exceed the allowance. Budget stops preserve
+changes and report a blocked turn; they never imply verified completion.
+
+Unchanged file reads covered by the source fingerprint and passing full verification can be
+reused within a turn. An approved critic response can be reused for the same
+request and current verified snapshot. Source changes, verification config,
+hooks, and trust records invalidate reusable evidence. Before/after hooks still
+run; external/MCP reads, shell commands, directory listings, searches, and
+reads of excluded artifacts/dependencies execute normally. Local tool plugins
+disable result reuse because they can override built-in tools. Set `fresh=true`
+on verification or critic calls when a deliberately new check is required. Reused requests
+still count against the tool-call limit, preventing a model from looping for
+free. Repeating arguments with changing results does not trigger a false loop.
+
+Each model step receives the original objective, changed paths, remaining
+limits, and verification/review state. Once the required evidence is current,
+the runtime prompts the agent to finish if all requested work is satisfied.
+It does not infer that passing tests alone completes the user's objective.
+Later changes still require fresh checks and any applicable critic approval.

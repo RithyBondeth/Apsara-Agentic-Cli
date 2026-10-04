@@ -6,10 +6,15 @@ Welcome to the Apsara alpha test! Follow these steps to get the AI coding agent 
 
 Ensure you have **Python 3.10–3.14**, **pipx**, and **Git** installed.
 
+This guide targets the unpublished `0.1.0a2` candidate. From the source checkout:
+
 ```bash
-# Install the exact private-alpha build
-pipx install https://github.com/RithyBondeth/Apsara-Agentic-Cli/releases/download/v0.1.0a1/apsara_agentic-0.1.0a1-py3-none-any.whl
+python3 -m pip install build
+python3 -m build
+pipx install ./dist/apsara_agentic-0.1.0a2-py3-none-any.whl
 ```
+
+The published `0.1.0a1` wheel is historical and does not contain these fixes.
 
 For source development instead, follow
 [RUN_PROJECT.md](https://github.com/RithyBondeth/Apsara-Agentic-Cli/blob/main/RUN_PROJECT.md).
@@ -25,7 +30,7 @@ cd /path/to/your/work/project
 apsara
 ```
 
-The full-screen UI opens immediately with OpenCode Zen's Big Pickle model. Send
+The candidate CLI opens with OpenCode Zen's Space Bunny Free model. Send
 your first request; if the OpenCode key is missing, Apsara requests it inline
 with hidden input. Choose whether to keep it for the session or store it in
 `~/.apsara/credentials.json` (owner-only, `chmod 600`). Use `/models` to choose
@@ -47,9 +52,10 @@ For safety, project `.env` files load provider credential keys only. Export
 advanced runtime settings in your shell; a checked-out project cannot use its
 `.env` to redirect the API or raise Apsara's token budget.
 
-Big Pickle is free for a limited period. OpenCode states that submitted data
-may be used to improve the model during that period, so do not test it with
-confidential repositories.
+Space Bunny's free availability is promotional and provider rules may change.
+Check the selected provider's data handling before sending private code. The
+older published alpha used Big Pickle, whose free tier now rejects Apsara;
+use the current candidate build for testing the updated default.
 
 Run `apsara doctor` to confirm your provider and key are detected.
 
@@ -79,6 +85,7 @@ apsara
 - `/help` - Show all commands.
 - `/add <path>` - Pin a file to the context.
 - `/status` - Check token usage and session cost.
+- `/budget` - Inspect model steps, tool calls, turn tokens, and reused results.
 - `/bug` - Save a privacy-safe diagnostic bundle with conversation and source
   content omitted by default.
 - `/bug --include-content` - Include redacted conversation and tool content

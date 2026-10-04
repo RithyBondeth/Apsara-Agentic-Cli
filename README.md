@@ -16,9 +16,18 @@ middle.
 
 ## Install
 
+The next alpha candidate is `0.1.0a2`, prepared from source and not yet
+published. Build it from this checkout and install the resulting wheel:
+
 ```bash
-pipx install https://github.com/RithyBondeth/Apsara-Agentic-Cli/releases/download/v0.1.0a1/apsara_agentic-0.1.0a1-py3-none-any.whl
+python3 -m pip install build
+python3 -m build
+pipx install ./dist/apsara_agentic-0.1.0a2-py3-none-any.whl
 ```
+
+The older [published alpha](https://github.com/RithyBondeth/Apsara-Agentic-Cli/releases/tag/v0.1.0a1)
+uses an outdated default model and lacks the current UI and runtime fixes.
+Use the candidate above for testing these changes.
 
 Python code intelligence works out of the box. For parser-accurate symbols and
 syntax diagnostics in JavaScript, TypeScript, Go, Rust, Java, Ruby, PHP, C#,
@@ -257,6 +266,15 @@ throughout the turn, including tools and active skills. Existing approvals
 remain in force. See [skills and context management](https://github.com/RithyBondeth/Apsara-Agentic-Cli/blob/main/docs/SKILLS_AND_CONTEXT.md)
 for format, limits, storage, and compaction behavior.
 
+Use `/budget` to inspect the current turn's model steps, tool calls, reported
+tokens, estimated reservations, and reused results. The sidebar updates these
+while work runs. Defaults are 25 steps, 50 tool calls, and 100,000 turn tokens;
+set `APSARA_MAX_STEPS`, `APSARA_MAX_TOOL_CALLS`, or `APSARA_MAX_TURN_TOKENS` in
+your shell to change them. Budget stops preserve edits for review. Local token
+estimates cannot guarantee a provider billing cap. Passing checks and unchanged
+workspace reads are reused while their evidence is current; later changes
+still invalidate verification and review.
+
 ## Lifecycle hooks
 
 Trusted hooks can enforce repository policy at `session_start`, `before_tool`,
@@ -399,7 +417,8 @@ The budget is derived from the selected model's context window, so a
 200k-window model gets a far larger working set than a 32k one. `/status` shows
 the current usage against both. `APSARA_INPUT_TOKEN_BUDGET` may lower the
 working budget, but it cannot exceed the selected model's safety allowance or
-the global 128k input ceiling. Cap per-turn tool calls with `APSARA_MAX_STEPS`.
+the global 128k input ceiling. Cap model steps with `APSARA_MAX_STEPS`, tool
+calls with `APSARA_MAX_TOOL_CALLS`, and turn tokens with `APSARA_MAX_TURN_TOKENS`.
 
 Token counts are provider-reported and aggregated across every model call in an
 agent turn, including automatic conversation summaries. If a streaming provider

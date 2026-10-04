@@ -166,6 +166,22 @@ def _tool_result_summary(tool_name: str, result: str) -> tuple[bool, str]:
 def print_event(event: dict[str, Any], ui: "ConsoleUI") -> None:
     event_type = event.get("type")
 
+    if event_type == "budget":
+        budget = dict(event.get("data") or {})
+        ui._run_budget = budget
+        fractions = [
+            budget.get("steps_used", 0) / max(1, budget.get("step_limit", 1)),
+            budget.get("tool_calls_used", 0) / max(1, budget.get("tool_call_limit", 1)),
+            (budget.get("reported_usage", 0) + budget.get("estimated_usage", 0))
+            / max(1, budget.get("usage_limit", 1)),
+        ]
+        if max(fractions) >= .8 and not ui._budget_warning_shown:
+            ui._budget_warning_shown = True
+            ui.warning("This turn is approaching its budget. Use /budget to inspect usage and limits.")
+        if hasattr(ui, "_invalidate"):
+            ui._invalidate()
+        return
+
     if event_type == "plan":
         steps = event.get("steps") or []
         titles = [str(step.get("title", "")) for step in steps if isinstance(step, dict)]

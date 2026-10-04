@@ -442,6 +442,7 @@ _HELP_SECTIONS: list[tuple[str, list[tuple[str, str, str]]]] = [
     ("Session", [
         ("/status", "", "Token usage, context health, session cost"),
         ("/usage", "", "Local token totals by model and saved session"),
+        ("/budget", "", "Current turn usage and model/tool/token limits"),
         ("/save", "", "Save the current session now"),
         ("/session", "", "Show session and workspace details"),
         ("/sessions", "", "List all saved sessions"),
@@ -557,6 +558,25 @@ def handle_chat_command(
         snapshot = ui.usage_snapshot() if hasattr(ui, "usage_snapshot") else {}
         ui.info("Usage summary")
         ui.print_block(format_usage_report(options.workspace_root, snapshot))
+        return True, current_model
+
+    if command_text == "/budget":
+        from apsara_cli.engine.budget import TurnBudget
+        from apsara_cli.engine.executor import _max_steps
+        from apsara_cli.engine.runtime import latest_run
+        latest = latest_run(options.workspace_root) or {}
+        budget = ui._run_budget or latest.get("budget") or TurnBudget.from_environment(_max_steps()).as_dict()
+        ui.print_block(
+            f"Model steps: {budget['steps_used']}/{budget['step_limit']}\n"
+            f"Tool calls: {budget['tool_calls_used']}/{budget['tool_call_limit']}\n"
+            f"Provider-reported tokens: {budget['reported_usage']:,}\n"
+            f"Reserved estimated usage: {budget['estimated_usage']:,}\n"
+            f"Turn token limit: {budget['usage_limit']:,}\n"
+            f"Complete provider usage: {budget['usage_complete']}\n"
+            f"Reused results: {budget['reused_checks']}\n\n"
+            "Set APSARA_MAX_STEPS, APSARA_MAX_TOOL_CALLS, and APSARA_MAX_TURN_TOKENS before launching.\n"
+            "Token enforcement uses local request estimates; this is not a provider billing cap."
+        )
         return True, current_model
 
     if command_text == "/checkpoints":

@@ -39,9 +39,9 @@ Each tester should have:
 - an OpenCode Zen API key
 - a repo or sample project they can safely test on
 
-Big Pickle is free for a limited period. OpenCode states that submitted data
-may be used to improve the model during that period, so testers should not use
-confidential repositories with the default model.
+The development default is Space Bunny Free. Its free availability is
+promotional; check provider access and data handling before sending private
+code. The older published alpha default is no longer suitable for these trials.
 
 Optional but recommended:
 
@@ -214,7 +214,7 @@ Before sharing with testers, confirm:
 
 - `.env` loading works
 - `apsara doctor --workspace .` works
-- `apsara chat --workspace .` works with the default `opencode/big-pickle` model
+- `apsara chat --workspace .` works with the default `opencode/space-bunny-free` model
 - the welcome screen renders nicely
 - the loading animation appears while the agent is working
 - assistant responses are readable
@@ -225,6 +225,10 @@ Before sharing with testers, confirm:
   file mutations
 - `/details` works
 - `/clear` works
+- `/budget` and the sidebar show current limits, with honest estimates when
+  provider usage is incomplete
+- three fresh trials per core task meet the completion, constrained-edit,
+  tool, token, and stability gates before claiming release-candidate readiness
 - `/bug` creates a metadata-only bundle and clearly asks the tester to review
   its files before sharing
 - `/bug --include-content` requires confirmation and still redacts recognizable

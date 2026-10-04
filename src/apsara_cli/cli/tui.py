@@ -507,6 +507,18 @@ def _sidebar_text(
         lines(f"   {ui.style(ui.rate_limit_label(), _DIMTXT)}")
     lines("")
 
+    budget = ui._run_budget
+    if budget:
+        lines(_section(ui, "◷", "Turn budget", _C_CONTEXT))
+        lines(f"   {budget['steps_used']}/{budget['step_limit']} steps · "
+              f"{budget['tool_calls_used']}/{budget['tool_call_limit']} tools")
+        spent = budget['reported_usage'] + budget['estimated_usage']
+        lines(f"   {spent:,}/{budget['usage_limit']:,} tokens")
+        if not budget['usage_complete']:
+            lines(f"   {ui.style('Includes reserved estimates', '38;2;247;200;100')}")
+        lines(f"   {budget['reused_checks']} results reused")
+        lines("")
+
     # Model: name, provider · tier, context window, key status.
     key_ok = True
     if entry:

@@ -11,6 +11,16 @@ def render_run_report(run: dict[str, Any]) -> str:
     for step in run.get("steps", []):
         mark = "x" if step.get("status") == "completed" else " "
         lines.append(f"- [{mark}] {step.get('title', '')} — {step.get('status', 'pending')}")
+    budget = run.get("budget") or {}
+    if budget:
+        lines.extend(["", "## Turn budget", "",
+                      f"- Model steps: {budget.get('steps_used', 0)}/{budget.get('step_limit', 0)}",
+                      f"- Tool calls: {budget.get('tool_calls_used', 0)}/{budget.get('tool_call_limit', 0)}",
+                      f"- Provider-reported tokens: {budget.get('reported_usage', 0)}",
+                      f"- Reserved estimated usage: {budget.get('estimated_usage', 0)}",
+                      f"- Token limit: {budget.get('usage_limit', 0)}",
+                      f"- Complete provider usage: {budget.get('usage_complete', False)}",
+                      f"- Reused results: {budget.get('reused_checks', 0)}"])
     if run.get("changed_files"):
         lines.extend(["", "## Changed files", "", *[f"- `{p}`" for p in run["changed_files"]]])
     if run.get("verification"):
