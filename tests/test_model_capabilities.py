@@ -28,6 +28,39 @@ def test_provider_client_restriction_is_distinct_from_missing_credentials():
     assert "Changing the API key alone may not resolve" in message
 
 
+def test_missing_credit_error_explains_recovery():
+    message = compatibility_error(RuntimeError("OpenAIException - Upstream request failed: Insufficient account funds"))
+    assert "Add credits" in message
+    assert "apsara doctor --live" in message
+    assert "API key alone" in message
+
+
+def test_restricted_model_fails_before_live_probe(monkeypatch, tmp_path):
+    from apsara_cli.cli.doctor import run_live_probe
+    from apsara_cli.engine import llm
+    monkeypatch.setenv("OPENCODE_API_KEY", "test-key")
+    async def forbidden(**kwargs):
+        pytest.fail("restricted model must not reach the provider")
+    monkeypatch.setattr(llm.litellm, "acompletion", forbidden)
+    options = SimpleNamespace(workspace_root=tmp_path, model="opencode/big-pickle", allow_bash=False,
+                              allowed_commands=set(), max_file_size=10000, bash_timeout=30)
+    result = asyncio.run(run_live_probe(options))
+    assert result.status == "fail"
+    assert "OpenCode client" in result.detail
+
+
+def test_explicit_restricted_model_returns_error_without_history_or_provider_changes(tmp_path):
+    from apsara_cli.cli.chat import execute_instruction
+    from apsara_cli.shared.ui import ConsoleUI
+    ui = ConsoleUI(use_color=False)
+    original = [{"role": "user", "content": "previous request"}]
+    # Preflight must stop before reading workspace or request options.
+    history, usage = asyncio.run(execute_instruction("new request", "opencode/big-pickle", original, None, ui))
+    assert history == original
+    assert usage is None
+    assert ui.last_run_state == "failed"
+
+
 def test_known_incompatible_models_fail_before_provider_call(monkeypatch, tmp_path):
     from apsara_cli.engine import llm
     from apsara_cli.cli import auth

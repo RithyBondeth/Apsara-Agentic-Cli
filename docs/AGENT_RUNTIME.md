@@ -125,10 +125,26 @@ rejected, and output requests are capped by the actual configured model limits.
 
 A present key and registry metadata do not guarantee provider access. The live
 OpenCode Big Pickle probe on 2026-10-03 returned a restriction requiring the
-OpenCode client for its free tier. Apsara reports that restriction explicitly;
-changing keys alone may not resolve it. Select a model with supported third-party
-API access for live evaluation. Automatic fallback from free models remains
-limited to other known free or local models.
+OpenCode client for its free tier. Apsara blocks that model before running a turn
+and reports the restriction explicitly; changing keys alone may not resolve it.
+The default is now `opencode/space-bunny-free`, a temporarily free Zen
+chat-completions model that passed the live probe. It requires a valid
+`OPENCODE_API_KEY`. Explicit model settings remain authoritative, including old
+Big Pickle settings: no automatic migration to paid access occurs.
+OpenCode chat-completions IDs route through the
+Zen endpoint with the OpenCode key; this route does not support Zen models that
+require the Responses, Anthropic, Google, or System One endpoints.
+Use `apsara doctor --live` to check actual account access, streaming, and tool
+calling. The live probe makes a small API request, billable for paid selections. Automatic fallback from
+free models remains limited to other known free or local models.
+
+Free access is model-specific: `opencode/space-bunny-free` passed the streamed
+tool-call probe on 2026-10-03 with the same key that hit Big Pickle's restriction.
+Use `--model bunny` for free testing. Its free pricing is promotional and may
+change; current provider pricing applies. `models.dev` currently reports a
+1,048,576-token context window, while Apsara retains its 128,000-token input
+ceiling. The probe is not evidence of coding quality. The paid MiniMax M2.5
+entry is marked deprecated according to OpenCode's current documentation.
 
 ## Extensibility and evaluation
 

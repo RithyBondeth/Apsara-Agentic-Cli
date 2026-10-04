@@ -134,9 +134,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_shared_options(chat_parser)
     chat_parser.add_argument("--tui", action="store_true", default=False,
-                             help="Force the full-screen split-pane TUI (the default in a real terminal).")
+                             help="Open the full-screen interface (the default in a real terminal).")
     chat_parser.add_argument("--classic", action="store_true", default=False,
-                             help="Use the classic scrolling chat instead of the full-screen TUI.")
+                             help="Use scrolling terminal chat instead of the full-screen interface.")
 
     init_parser = subparsers.add_parser("init", help="Initialize Apsara in the current project and open chat.")
     _add_shared_options(init_parser)
@@ -222,12 +222,10 @@ async def dispatch_command(args: argparse.Namespace, config: object) -> int:
         from apsara_cli.cli.chat import run_once
         return await run_once(args, config)
     if args.command == "chat":
-        import sys as _sys
-        # Full-screen TUI (chat pane + detail sidebar + boxed input) is the
-        # default in a real terminal; --classic opts into the scrolling REPL,
-        # and non-TTY contexts (pipes, CI) always get the classic loop.
+        # The centered welcome and anchored composer need a full-screen layout.
+        # Keep scrolling chat available explicitly and for non-TTY contexts.
         want_tui = getattr(args, "tui", False) or (
-            _sys.stdout.isatty() and not getattr(args, "classic", False)
+            sys.stdout.isatty() and not getattr(args, "classic", False)
         )
         if want_tui:
             try:

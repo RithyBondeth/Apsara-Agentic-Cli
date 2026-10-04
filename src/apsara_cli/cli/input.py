@@ -1,4 +1,5 @@
 import asyncio
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -10,6 +11,11 @@ try:
     from prompt_toolkit.key_binding import KeyBindings
     from prompt_toolkit.formatted_text import ANSI
     from prompt_toolkit.styles import Style
+    from prompt_toolkit.output.color_depth import ColorDepth
+    from prompt_toolkit.filters import Condition, is_done
+    from prompt_toolkit.layout import HSplit, Layout, Window, ConditionalContainer
+    from prompt_toolkit.layout.controls import FormattedTextControl
+    from prompt_toolkit.layout.dimension import Dimension
     HAS_PROMPT_TOOLKIT = True
 except ImportError:
     HAS_PROMPT_TOOLKIT = False
@@ -69,6 +75,18 @@ class SlashCompleter(Completer):
                     yield Completion(sub, -len(word), display=sub)
 
 _session: Optional[object] = None
+_input_chrome: dict[str, object] = {"footer": None, "continuation": "  ▌ "}
+
+
+def color_depth_for_ui(use_color: Optional[bool]):
+    """Let an explicit color choice override inherited NO_COLOR for the renderer."""
+    if use_color is None or not HAS_PROMPT_TOOLKIT:
+        return None
+    if not use_color:
+        return ColorDepth.DEPTH_1_BIT
+    if os.environ.get("COLORTERM", "").lower() in {"truecolor", "24bit"}:
+        return ColorDepth.DEPTH_24_BIT
+    return ColorDepth.DEPTH_8_BIT
 
 
 def _build_session(workspace_root: Path) -> object:
@@ -96,22 +114,43 @@ def _build_session(workspace_root: Path) -> object:
             buffer.cursor_position = 1
         buffer.start_completion(select_first=False)
 
-    return PromptSession(
+    session = PromptSession(
         history=FileHistory(str(history_dir / "input_history")),
         auto_suggest=AutoSuggestFromHistory(),
         completer=completer,
         complete_while_typing=True,
         key_bindings=kb,
         multiline=True,
-        # Continuation gutter matches the typing box: indigo '│' edge + accent bar.
         prompt_continuation=lambda width, line_number, is_soft_wrap: ANSI(
-            "\033[38;2;90;108;180m│\033[0m\033[1;38;2;96;150;250m▌\033[0m "
+            str(_input_chrome["continuation"])
         ),
+        reserve_space_for_menu=0,
         style=Style.from_dict({
-            # Dim single-line strip under the input, OpenCode-footer style.
-            "bottom-toolbar": "noreverse bg:default fg:#8a8f98",
+            "auto-suggestion": "fg:#6f7483",
+            "completion-menu.completion": "bg:#161a24 fg:#c4cee0",
+            "completion-menu.completion.current": "bg:#253451 fg:#ffffff",
         }),
     )
+    # Keep model/status directly below the composer without reserving the
+    # terminal's bottom row. Retain PromptSession's editing, search and menus.
+    original_layout = session.app.layout
+    # Make room for an open completion menu, but keep idle input compact.
+    original_layout.current_window.height = lambda: Dimension(
+        min=8 if session.default_buffer.complete_state is not None else 1
+    )
+    footer = ConditionalContainer(
+        Window(
+            FormattedTextControl(lambda: ANSI(str(_input_chrome["footer"] or ""))),
+            height=1,
+            dont_extend_height=True,
+        ),
+        filter=Condition(lambda: _input_chrome["footer"] is not None) & ~is_done,
+    )
+    session.app.layout = Layout(
+        HSplit([original_layout.container, footer]),
+        focused_element=original_layout.current_control,
+    )
+    return session
 
 
 async def get_password_async(prompt_text: str) -> str:
@@ -132,25 +171,33 @@ async def get_password_async(prompt_text: str) -> str:
         return ""
 
 
-async def get_input_async(prompt_text: str, workspace_root: Path, toolbar: Optional[str] = None) -> str:
+async def get_input_async(
+    prompt_text: str,
+    workspace_root: Path,
+    toolbar: Optional[str] = None,
+    continuation: Optional[str] = None,
+    use_color: Optional[bool] = None,
+) -> str:
     """
     Async input using prompt_toolkit's prompt_async() so it doesn't conflict
     with the outer asyncio event loop started by asyncio.run() in parser.py.
-    `toolbar` renders as a dim strip below the input while typing (model,
-    session, hints — OpenCode style). Falls back to a thread-safe stdin read
+    `toolbar` renders inline below the input while typing. Falls back to a stdin read
     when prompt_toolkit is unavailable. Raises KeyboardInterrupt or EOFError.
     """
     if not HAS_PROMPT_TOOLKIT:
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, lambda: input(prompt_text))
+        result = await loop.run_in_executor(None, lambda: input(prompt_text))
+        if toolbar:
+            print(toolbar)
+        return result
 
     global _session
     if _session is None:
         _session = _build_session(workspace_root)
 
-    # ANSI so the OpenCode-style mode line keeps its colors in the toolbar,
-    # passed through verbatim so the box's bottom border stays aligned.
+    _input_chrome["footer"] = toolbar
+    _input_chrome["continuation"] = continuation or "  ▌ "
     return await _session.prompt_async(
         ANSI(prompt_text),
-        bottom_toolbar=ANSI(toolbar) if toolbar else None,
+        color_depth=color_depth_for_ui(use_color),
     )

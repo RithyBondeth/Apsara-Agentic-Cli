@@ -10,7 +10,7 @@ from apsara_cli.shared.ui import ConsoleUI, default_use_color
 DEFAULT_CONFIG_TEMPLATE = """# Apsara Project Configuration
 [defaults]
 # workspace = "."
-# model = "opencode/big-pickle"
+# model = "opencode/space-bunny-free"
 # auto_approve = false
 
 # Let the agent verify its own work. Without a test runner on the allowlist it
@@ -98,11 +98,12 @@ async def init_workspace(args: argparse.Namespace, config: object) -> int:
         ui.success("Created .gitignore with Apsara entries.")
 
     if not getattr(args, "no_chat", False):
-        from apsara_cli.cli.chat import chat_loop
+        from apsara_cli.cli.parser import dispatch_command
         # Reload config for the chat loop
         from apsara_cli.config.cli_config import load_cli_config
         new_config = load_cli_config(str(config_file), str(workspace_root))
-        return await chat_loop(args, new_config)
+        chat_args = argparse.Namespace(**{**vars(args), "command": "chat"})
+        return await dispatch_command(chat_args, new_config)
     
     return 0
 

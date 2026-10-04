@@ -109,8 +109,8 @@ DEFAULT_THEME = Theme()
 # Shared dark surface used by transcript cards and the full-screen TUI's
 # composer/sidebar. Keeping both representations here prevents the three
 # boxed surfaces from drifting apart again.
-PANEL_BACKGROUND_HEX = "#0e1015"
-PANEL_BACKGROUND_ANSI = "48;2;14;16;21"
+PANEL_BACKGROUND_HEX = "#191d2b"
+PANEL_BACKGROUND_ANSI = "48;2;25;29;43"
 
 
 # Blanket approval is intentionally allowlisted to reversible workspace

@@ -127,8 +127,8 @@ def test_tui_user_turn_uses_the_filled_question_card():
     assert "▌" in output
     assert "Explain this code" in output
     assert "you" in output
-    assert ui.content_width() == 39
-    assert max(len(line) for line in ui.rendered_lines()) <= 36
+    assert ui.content_width() == 80
+    assert max(len(line) for line in ui.rendered_lines()) <= 77
 
 
 def test_tui_cards_fit_a_narrow_terminal():
@@ -153,8 +153,12 @@ def test_tui_hides_sidebar_when_it_would_starve_conversation():
     assert ui.content_width() == 60
 
     ui.app.output.columns = 80
+    assert ui.sidebar_is_rendered() is False
+    assert ui.content_width() == 80
+
+    ui.app.output.columns = 100
     assert ui.sidebar_is_rendered() is True
-    assert ui.content_width() == 39
+    assert ui.content_width() == 59
 
 
 def test_tui_sidebar_is_enabled_by_default_on_wide_terminals():
