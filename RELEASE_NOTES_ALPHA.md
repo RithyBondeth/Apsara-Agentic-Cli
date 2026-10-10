@@ -1,153 +1,75 @@
-# Apsara Agentic 0.1.0a1 — Private Alpha
+# Apsara Agentic 0.1.0a2 — Alpha candidate
 
-Version: `0.1.0a1`
+Version: `0.1.0a2`
 
-- Release date: 2026-08-10
-- Python package: `apsara-agentic==0.1.0a1`
-- Release tag: `v0.1.0a1`
+Status: prepared locally; no release tag, GitHub release, or PyPI publication.
 
-## Overview
+## Changes
 
-This is the first private-alpha release of Apsara Agentic, a local,
-workspace-scoped coding assistant. Running `apsara` opens the full-screen
-terminal interface immediately with Big Pickle selected by default; no Apsara
-account or separate Apsara chat service is required.
+- Space Bunny Free is the default OpenCode model, with actionable access errors
+  and paid fallback disabled for the retained free-model validation.
+- The colorful terminal UI follows the OpenCode layout: centered welcome,
+  transcript cards, anchored composer, and optional sidebar. `--classic`
+  preserves scrolling terminal chat.
+- Current verification and review evidence guides the agent toward a final
+  answer when the requested work is finished. Later edits invalidate evidence.
+- Deterministic file reads, passing full checks, and approved critic results
+  can be reused within a turn when source and policy fingerprints match.
+  Explicit fresh checks execute again; external tools and shell commands do too.
+  Earlier exchanges compact sooner as the turn allowance shrinks, while
+  required context remains protected. Approvals for another project do not
+  invalidate this project's evidence.
+- `/budget`, the sidebar, and durable reports expose model steps, requested
+  tool calls, provider totals, estimates, and reused results. Local limits
+  preserve edits and block honestly when more work cannot fit.
+- Single fenced JSON critic verdicts are accepted; material findings still
+  require changes and missing review still blocks verified completion. Final
+  reviews receive the actual objective and current verification evidence;
+  agent-suggested extra cases are not accepted as additional requirements.
+  Model review may still make scope or correctness errors.
 
-The release is intended for trusted developer friends, technical early
-adopters, and small internal testing groups. It is not a production-stable
-release.
+- Phase allowances protect checking, review, and finishing within the same
+  overall turn limits. Unused exploration funds can support implementation.
+- Missing review verdicts and timeouts have bounded recovery; a failed fresh
+  review invalidates an older approval. Material findings still block completion.
+- Efficiency reports match successfully verified repairs and count failed
+  attempts in cost per completion. Incomplete usage stays explicitly unknown.
 
-## Highlights
+## Validation
 
-### Consistent boxed terminal interface
+Current live and artifact evidence is documented in
+`docs/PHASE_RECOVERY_VALIDATION_2026-10-04.md`. Only OpenCode's free model is included
+in live provider testing. Other provider adapters have offline coverage and
+remain uncertified for live coding; see `docs/PROVIDER_VALIDATION.md`.
 
-- full-screen transcript, right-side detail panel, and rounded input composer
-- matching boxed user and assistant responses
-- internal tool activity hidden by default and available with `Ctrl+B` or
-  `/details`
-- clean response presentation without redundant completion or build lines
-- compact author timestamps and responsive terminal sizing
-- each bare `apsara` launch starts a fresh conversation; saved sessions resume
-  only when explicitly requested
+556 local tests and all 18 runtime CI jobs passed on `44a146d`.
+Live repeats ran on preceding runtime `32ed04c`; the final fresh-review
+safety fix has regression coverage but was not included in that live matrix.
+The subsequent focused free-model repeat passed 4/6 Node/multi-file trials;
+pinned optimized/reference trials passed 0/6 and 1/6.
+See `docs/PHASE_RECOVERY_VALIDATION_2026-10-04.md` for actual stability gates,
+complete/incomplete usage, and successful-work comparisons. Earlier full core,
+recovery, and local MCP evidence is retained on its exact preceding runtimes.
+No other provider or language runtime is newly certified by this focused repeat.
 
-### Strong coding-agent runtime
-
-- structured baseline, targeted, and full project verification
-- stale verification is invalidated after every subsequent workspace mutation
-- independent tool-free critic review request for multi-file changes
-- trusted lifecycle hooks at session, tool, verification, and completion
-  boundaries
-- disposable Git-worktree verification with external-symlink protection
-- optional LSP-backed definitions and references for Python, TypeScript,
-  JavaScript, Go, Rust, C, and C++
-- pinned real-repository benchmark support alongside bundled offline fixtures
-- bounded live benchmark trials with repeatable `results.json` and
-  `summary.json` evidence
-- bounded retries for empty provider responses, which otherwise fail the turn
-  instead of appearing as successful completion
-- per-request provider deadlines with one safe retry, preventing a stalled
-  model call from consuming an entire turn
-
-### Safer local execution
-
-- workspace path boundaries for built-in file tools
-- recoverable edit and turn checkpoints with undo support
-- digest-based approval for plugins, MCP servers, verification commands, and
-  lifecycle hooks
-- command allowlists, nested-interpreter validation, and redirection checks
-- `--read-only`, `--dry-run`, scoped `--auto-approve`, and process-group cleanup
-- privacy-safe bug bundles that omit content by default and redact recognizable
-  credentials
-
-### Code intelligence and workflow
-
-- repository maps, symbol search, definitions, references, and diagnostics
-- Python AST support by default and optional Tree-sitter language support
-- Git status, diff, log, show, blame, and checkpoint tools
-- project memory, session history, context trimming, and usage reporting
-- optional MCP servers and locally approved tool plugins
-- model picker and BYO-provider-key setup inside the terminal
-
-### Packaging and compatibility
-
-- Python 3.10 through 3.14
-- tested wheel installation and pipx lifecycle
-- Linux and macOS test matrices plus Windows smoke coverage
-- offline doctor diagnostics and optional semantic-intelligence extra
-
-## Installation
+## Install the candidate
 
 ```bash
-pipx install https://github.com/RithyBondeth/Apsara-Agentic-Cli/releases/download/v0.1.0a1/apsara_agentic-0.1.0a1-py3-none-any.whl
+python3 -m pip install build
+python3 -m build
+pipx install ./dist/apsara_agentic-0.1.0a2-py3-none-any.whl
+apsara doctor --no-live
 apsara
 ```
 
-For optional Tree-sitter parsers:
+## Alpha limits
 
-```bash
-pipx inject apsara-agentic 'tree-sitter-language-pack>=1.0.0'
-```
+The bundled tasks and injected regressions are limited samples, not a guarantee
+for arbitrary repositories. Review generated changes and the final verification
+report. Free-model availability depends on the provider. Turn token limits use
+conservative estimates and are not a provider billing cap. Executed project
+commands run with the user's permissions; isolated verification is not an OS
+sandbox. Live testing of paid providers is outside this candidate's scope.
 
-This private alpha is distributed as the wheel attached to its GitHub
-prerelease. PyPI publication can follow separately without changing the tested
-release artifact.
-
-## Release validation
-
-- full offline test suite across supported Python versions
-- wheel and source-distribution metadata validation
-- clean virtual-environment installation and dependency audit
-- pipx install, upgrade, execution, and uninstall lifecycle on Linux, macOS,
-  and Windows
-- three live trials per bundled coding benchmark case with Big Pickle
-
-The retained live benchmark evidence passed 15/15 trials (100%): zero flaky
-trials, zero unstable cases, and zero unsafe edits. One layered trial exceeded
-its soft token budget while still scoring 90/100 and passing every correctness
-and safety gate.
-
-- [Full benchmark results](https://github.com/RithyBondeth/Apsara-Agentic-Cli/releases/download/v0.1.0a1/apsara_agentic-0.1.0a1-benchmark-results.json)
-- [Benchmark summary](https://github.com/RithyBondeth/Apsara-Agentic-Cli/releases/download/v0.1.0a1/apsara_agentic-0.1.0a1-benchmark-summary.json)
-
-## Known alpha limitations
-
-- live model quality and latency depend on OpenCode Zen availability, the
-  tester's API key, billing, and rate limits
-- OpenCode warns against sending confidential code to Big Pickle
-- isolated verification protects ordinary workspace state but is not an
-  operating-system security sandbox
-- LSP tools require the corresponding language server to be installed
-- bundled benchmarks are intentionally small; larger pinned-repository cases
-  still need to be curated
-- users should review proposed changes and keep Git backups
-
-## Rollback
-
-Remove the alpha package with:
-
-```bash
-pipx uninstall apsara-agentic
-```
-
-If upgrading from another build, reinstall the exact alpha version:
-
-```bash
-pipx install --force https://github.com/RithyBondeth/Apsara-Agentic-Cli/releases/download/v0.1.0a1/apsara_agentic-0.1.0a1-py3-none-any.whl
-```
-
-## Feedback areas
-
-- first-run key setup and startup clarity
-- boxed UI consistency and terminal resizing
-- response cleanliness and detail-panel usefulness
-- edit approval, verification, critic, and undo flows
-- provider latency, retry behavior, and actionable errors
-- benchmark tasks that pass tests but reduce maintainability
-
-## Related documentation
-
-- [Tester quickstart](https://github.com/RithyBondeth/Apsara-Agentic-Cli/blob/v0.1.0a1/TESTER_QUICKSTART.md)
-- [Alpha testing guide](https://github.com/RithyBondeth/Apsara-Agentic-Cli/blob/v0.1.0a1/ALPHA_TESTING.md)
-- [Run guide](https://github.com/RithyBondeth/Apsara-Agentic-Cli/blob/v0.1.0a1/RUN_PROJECT.md)
-- [Agent runtime](https://github.com/RithyBondeth/Apsara-Agentic-Cli/blob/v0.1.0a1/docs/AGENT_RUNTIME.md)
-- [Evaluation strategy](https://github.com/RithyBondeth/Apsara-Agentic-Cli/blob/v0.1.0a1/docs/EVALUATION_STRATEGY.md)
+The previous release notes and original validation claims are preserved in
+`docs/releases/0.1.0a1.md` as historical evidence.

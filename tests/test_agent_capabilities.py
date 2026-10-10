@@ -169,6 +169,7 @@ def test_critic_call_has_no_tools_and_returns_review(tmp_path):
     assert content == "APPROVED"
     assert usage["total_tokens"] == 5
     assert mocked.await_args.kwargs["with_tools"] is False
+    assert mocked.await_args.kwargs["max_completion_tokens"] == critic.CRITIC_MAX_COMPLETION_TOKENS
 
 
 @pytest.mark.skipif(not shutil.which("git"), reason="git unavailable")

@@ -1,0 +1,600 @@
+{
+  "status": "Interrupted while fixing phase accounting; incomplete suites excluded from final acceptance and efficiency comparisons",
+  "trials": [
+    {
+      "runtime_commit": "fd534f9",
+      "case_and_trial": "python-layered-settings/trial-1",
+      "agent_state": "cancelled",
+      "budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 6,
+        "tool_calls_used": 10,
+        "reported_usage": 21760,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "implement",
+        "phase_spent": {
+          "explore": 17389,
+          "implement": 4371
+        },
+        "review_attempts": 0,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        }
+      }
+    },
+    {
+      "runtime_commit": "fd534f9",
+      "case_and_trial": "typescript-safe-chunking/trial-1",
+      "agent_state": "blocked",
+      "budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 7,
+        "tool_calls_used": 8,
+        "reported_usage": 21848,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "finish",
+        "phase_spent": {
+          "explore": 12096,
+          "implement": 3729,
+          "finish": 4266,
+          "review": 1757
+        },
+        "review_attempts": 1,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        }
+      }
+    },
+    {
+      "runtime_commit": "fd534f9",
+      "case_and_trial": "typescript-safe-chunking/trial-2",
+      "agent_state": "blocked",
+      "budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 8,
+        "tool_calls_used": 9,
+        "reported_usage": 22381,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "finish",
+        "phase_spent": {
+          "explore": 14706,
+          "implement": 3660,
+          "finish": 4015
+        },
+        "review_attempts": 0,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        }
+      }
+    },
+    {
+      "runtime_commit": "fd534f9",
+      "case_and_trial": "typescript-safe-chunking/trial-3",
+      "agent_state": "blocked",
+      "budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 8,
+        "tool_calls_used": 10,
+        "reported_usage": 24321,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "finish",
+        "phase_spent": {
+          "explore": 15050,
+          "implement": 3778,
+          "finish": 4371,
+          "review": 1122
+        },
+        "review_attempts": 1,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        }
+      }
+    },
+    {
+      "runtime_commit": "fd534f9",
+      "case_and_trial": "boltons-chunk-contract/trial-1",
+      "agent_state": "blocked",
+      "budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 10,
+        "tool_calls_used": 12,
+        "reported_usage": 61125,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "finish",
+        "phase_spent": {
+          "explore": 16908,
+          "implement": 20570,
+          "verify": 7030,
+          "finish": 6517,
+          "review": 10100
+        },
+        "review_attempts": 2,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        }
+      }
+    },
+    {
+      "runtime_commit": "fd534f9",
+      "case_and_trial": "boltons-chunk-contract/trial-2",
+      "agent_state": "cancelled",
+      "budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 5,
+        "tool_calls_used": 7,
+        "reported_usage": 22489,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "implement",
+        "phase_spent": {
+          "explore": 14045,
+          "implement": 8444
+        },
+        "review_attempts": 0,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        }
+      }
+    },
+    {
+      "runtime_commit": "fd534f9",
+      "case_and_trial": "boltons-chunk-contract/trial-1",
+      "agent_state": "blocked",
+      "budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 5,
+        "tool_calls_used": 8,
+        "reported_usage": 35608,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "implement",
+        "phase_spent": {
+          "explore": 12233,
+          "implement": 23375
+        },
+        "review_attempts": 0,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        }
+      }
+    },
+    {
+      "runtime_commit": "fd534f9",
+      "case_and_trial": "boltons-chunk-contract/trial-2",
+      "agent_state": "blocked",
+      "budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 6,
+        "tool_calls_used": 9,
+        "reported_usage": 39756,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "implement",
+        "phase_spent": {
+          "explore": 12631,
+          "implement": 27125
+        },
+        "review_attempts": 0,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        }
+      }
+    },
+    {
+      "runtime_commit": "4e794c3",
+      "case_and_trial": "python-layered-settings/trial-1",
+      "agent_state": "cancelled",
+      "budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 4,
+        "tool_calls_used": 9,
+        "reported_usage": 10924,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "explore",
+        "phase_spent": {
+          "explore": 10924
+        },
+        "review_attempts": 0,
+        "implementation_closed": false,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        },
+        "phase_available": 9076
+      }
+    },
+    {
+      "runtime_commit": "4e794c3",
+      "case_and_trial": "typescript-safe-chunking/trial-1",
+      "agent_state": "completed_verified",
+      "budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 7,
+        "tool_calls_used": 8,
+        "reported_usage": 22758,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "finish",
+        "phase_spent": {
+          "explore": 11159,
+          "implement": 3797,
+          "verify": 3692,
+          "finish": 4110
+        },
+        "review_attempts": 0,
+        "implementation_closed": false,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        },
+        "phase_available": 77242
+      }
+    },
+    {
+      "runtime_commit": "4e794c3",
+      "case_and_trial": "typescript-safe-chunking/trial-2",
+      "agent_state": "blocked",
+      "budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 11,
+        "tool_calls_used": 15,
+        "reported_usage": 35187,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "verify",
+        "phase_spent": {
+          "explore": 14198,
+          "implement": 16146,
+          "verify": 4843
+        },
+        "review_attempts": 0,
+        "implementation_closed": false,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        },
+        "phase_available": 5157
+      }
+    },
+    {
+      "runtime_commit": "4e794c3",
+      "case_and_trial": "typescript-safe-chunking/trial-3",
+      "agent_state": "completed_verified",
+      "budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 10,
+        "tool_calls_used": 13,
+        "reported_usage": 48916,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "finish",
+        "phase_spent": {
+          "explore": 11358,
+          "implement": 8962,
+          "verify": 8197,
+          "review": 15413,
+          "finish": 4986
+        },
+        "review_attempts": 2,
+        "implementation_closed": false,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        },
+        "phase_available": 51084
+      }
+    },
+    {
+      "runtime_commit": "4e794c3",
+      "case_and_trial": "boltons-chunk-contract/trial-1",
+      "agent_state": "completed_verified",
+      "budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 7,
+        "tool_calls_used": 9,
+        "reported_usage": 53744,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "finish",
+        "phase_spent": {
+          "explore": 18127,
+          "implement": 17485,
+          "verify": 8884,
+          "finish": 9248
+        },
+        "review_attempts": 0,
+        "implementation_closed": false,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        },
+        "phase_available": 46256
+      }
+    },
+    {
+      "runtime_commit": "4e794c3",
+      "case_and_trial": "boltons-chunk-contract/trial-2",
+      "agent_state": "blocked",
+      "budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 6,
+        "tool_calls_used": 8,
+        "reported_usage": 32614,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "verify",
+        "phase_spent": {
+          "explore": 15765,
+          "implement": 8392,
+          "verify": 8457
+        },
+        "review_attempts": 0,
+        "implementation_closed": false,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        },
+        "phase_available": 1543
+      }
+    },
+    {
+      "runtime_commit": "4e794c3",
+      "case_and_trial": "boltons-chunk-contract/trial-3",
+      "agent_state": "completed_verified",
+      "budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 8,
+        "tool_calls_used": 12,
+        "reported_usage": 59232,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "finish",
+        "phase_spent": {
+          "explore": 11711,
+          "implement": 15967,
+          "verify": 9693,
+          "review": 11063,
+          "finish": 10798
+        },
+        "review_attempts": 1,
+        "implementation_closed": false,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        },
+        "phase_available": 40768
+      }
+    },
+    {
+      "runtime_commit": "4e794c3",
+      "case_and_trial": "more-itertools-shared-chunk-contract/trial-1",
+      "agent_state": "cancelled",
+      "budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 7,
+        "tool_calls_used": 12,
+        "reported_usage": 44213,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "review",
+        "phase_spent": {
+          "explore": 16277,
+          "implement": 9243,
+          "verify": 9184,
+          "review": 18340
+        },
+        "review_attempts": 0,
+        "implementation_closed": false,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        },
+        "phase_available": 20491
+      }
+    },
+    {
+      "runtime_commit": "4e794c3",
+      "case_and_trial": "boltons-chunk-contract/trial-1",
+      "agent_state": "blocked",
+      "budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 6,
+        "tool_calls_used": 8,
+        "reported_usage": 47337,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "implement",
+        "phase_spent": {
+          "explore": 12146,
+          "implement": 35191
+        },
+        "review_attempts": 0,
+        "implementation_closed": true,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        },
+        "phase_available": 0
+      }
+    },
+    {
+      "runtime_commit": "4e794c3",
+      "case_and_trial": "boltons-chunk-contract/trial-2",
+      "agent_state": "blocked",
+      "budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 8,
+        "tool_calls_used": 11,
+        "reported_usage": 47431,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "verify",
+        "phase_spent": {
+          "explore": 17846,
+          "implement": 22411,
+          "verify": 7174
+        },
+        "review_attempts": 0,
+        "implementation_closed": true,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        },
+        "phase_available": 2826
+      }
+    },
+    {
+      "runtime_commit": "4e794c3",
+      "case_and_trial": "boltons-chunk-contract/trial-3",
+      "agent_state": "blocked",
+      "budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 6,
+        "tool_calls_used": 9,
+        "reported_usage": 37833,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "implement",
+        "phase_spent": {
+          "explore": 12541,
+          "implement": 25292
+        },
+        "review_attempts": 0,
+        "implementation_closed": false,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        },
+        "phase_available": 4708
+      }
+    }
+  ]
+}

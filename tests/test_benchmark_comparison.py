@@ -83,3 +83,55 @@ def test_reference_profile_keeps_permissions_and_changes_only_exposed_tools(tmp_
             reference = tools.get_request_tools()
         assert len(reference) > len(optimized)
         assert "run_bash_command" not in {item["function"]["name"] for item in reference}
+
+
+def _quality_row(trial, tokens, **overrides):
+    return {'name':'repair','trial':trial,'agent_state':'completed_verified',
+        'baseline_failed':True,'changed_files':['app.py'],'verification':[{'status':'passed','returncode':0}],
+        'usage':{'total_tokens':tokens},'latency_seconds':10,**overrides}
+
+
+def _compare_rows(tmp_path,left,right):
+    paths=[tmp_path/'opt.json',tmp_path/'ref.json']
+    for path,rows in zip(paths,(left,right)):
+        path.write_text(json.dumps({'model':'same','suite':'same','cases':rows}))
+    return compare_benchmark_results(*paths)
+
+
+def test_successful_work_excludes_blocked_and_unsafe_repairs_but_keeps_their_cost(tmp_path):
+    left=[_quality_row(1,100),_quality_row(2,900,agent_state='blocked'),
+        _quality_row(3,500,unexpected_changes=['test.py'])]
+    right=[_quality_row(i,200) for i in range(1,4)]
+    d=_compare_rows(tmp_path,left,right)
+    assert d['successful_work']['optimized']['total_tokens']['value']==100
+    assert d['successful_work']['optimized']['all_trial_tokens_per_completion']==1500
+    assert d['matched_successful_work']['sample_count']==1
+    assert d['matched_successful_work']['observed_savings_percent']==50
+    assert d['matched_successful_work']['status']=='insufficient_repeated_samples'
+
+
+def test_unknown_usage_and_flaky_or_invalid_baselines_do_not_qualify_for_pairing(tmp_path):
+    left=[_quality_row(1,100,usage_complete=False),_quality_row(2,100,verification_flaky=True),
+        _quality_row(3,100,baseline_failed=False),_quality_row(4,100,baseline_verification_flaky=True)]
+    right=[_quality_row(i,200) for i in range(1,5)]
+    d=_compare_rows(tmp_path,left,right)
+    assert d['successful_work']['optimized']['completed_trials']==1
+    assert d['successful_work']['optimized']['measured_completed_trials']==0
+    assert d['successful_work']['optimized']['all_trial_tokens_per_completion'] is None
+    assert d['matched_successful_work']['sample_count']==0
+    assert d['matched_successful_work']['observed_savings_percent'] is None
+
+
+def test_pairing_requires_unique_matching_trials_and_repeats_for_every_case(tmp_path):
+    left=[_quality_row(i,100) for i in range(1,4)]
+    right=[_quality_row(i,200) for i in range(1,4)]
+    d=_compare_rows(tmp_path,left,right)
+    assert d['matched_successful_work']['sample_count']==3
+    assert d['matched_successful_work']['status']=='repeated_matched_samples'
+    d=_compare_rows(tmp_path,left+[left[0]],right+[_quality_row(4,200)])
+    assert d['matched_successful_work']['sample_count']==2
+    assert d['matched_successful_work']['status']=='insufficient_repeated_samples'
+    d=_compare_rows(tmp_path,left+[_quality_row(1,100,name='another',agent_state='blocked')],
+        right+[_quality_row(1,200,name='another')])
+    assert d['matched_successful_work']['sample_count']==3
+    assert d['matched_successful_work']['status']=='insufficient_repeated_samples'

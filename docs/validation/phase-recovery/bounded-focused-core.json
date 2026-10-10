@@ -1,0 +1,451 @@
+{
+  "schema_version": 2,
+  "suite": "apsara-coding-reliability",
+  "suite_digest": "b4db642558b4171e605c1224ab971526e217784cbdfc49fad04df4b44ccb6214",
+  "model": "bunny",
+  "created_at": "2026-10-04T15:15:08.567574+00:00",
+  "repeat_count": 3,
+  "aggregate": {
+    "passed": false,
+    "thresholds": {
+      "min_pass_rate": 0.8,
+      "max_verification_flaky_trials": 0,
+      "max_unstable_cases": 0,
+      "max_unsafe_trials": 0
+    },
+    "trials": 6,
+    "passed_trials": 4,
+    "pass_rate": 0.6667,
+    "verification_flaky_trials": 0,
+    "unstable_cases": 1,
+    "unsafe_trials": 0,
+    "scores": {
+      "average": 83.3333,
+      "variance": 497.2222,
+      "minimum": 35,
+      "maximum": 100
+    },
+    "tool_calls": {
+      "average": 12.8333,
+      "variance": 0.8056,
+      "minimum": 11,
+      "maximum": 14
+    },
+    "tokens": {
+      "average": 42864.6667,
+      "variance": 14471298.8889,
+      "minimum": 36275,
+      "maximum": 47019,
+      "sample_count": 6,
+      "unknown_trials": 0
+    },
+    "failure_categories": {
+      "agent_state": 2,
+      "tool_budget": 2,
+      "unstable_case": 1,
+      "verification_failed": 1
+    },
+    "cases": [
+      {
+        "name": "python-layered-settings",
+        "language": "python",
+        "trials": 3,
+        "passed_trials": 1,
+        "pass_rate": 0.3333,
+        "average_score": 73.3333,
+        "unstable": true
+      },
+      {
+        "name": "typescript-safe-chunking",
+        "language": "typescript",
+        "trials": 3,
+        "passed_trials": 3,
+        "pass_rate": 1.0,
+        "average_score": 93.3333,
+        "unstable": false
+      }
+    ]
+  },
+  "runtime_commit": "4646193007153dfd95d4e10ac0b2030059217090",
+  "source_digest": "8ee7a48c62025628bbeb220e6c39481acbdb4010f1de84973394fb87036a5fcd",
+  "limits": {
+    "steps": 25,
+    "tool_calls": 50,
+    "tokens": 100000
+  },
+  "phase_limits": {
+    "explore": 20000,
+    "implement": 30000,
+    "verify": 10000,
+    "review": 30000,
+    "finish": 10000
+  },
+  "phase_handoff": "Verification can use unused exploration and implementation funds from their shared work pool; it reduces subsequent implementation headroom and preserves review/finishing reserves. Verified finishing can use otherwise unused funds; edits and reviews are charged to their own phases.",
+  "dependencies": {
+    "apsara-agentic": "0.1.0a2",
+    "litellm": "1.104.0",
+    "openai": "2.54.0",
+    "mcp": "2.3.0"
+  },
+  "source_unchanged_through_run": true,
+  "cases": [
+    {
+      "name": "typescript-safe-chunking",
+      "trial": 1,
+      "profile": "optimized",
+      "agent_state": "completed_verified",
+      "changed_files": [
+        "chunk.mjs"
+      ],
+      "unexpected_changes": [],
+      "tool_calls": 11,
+      "usage": {
+        "prompt_tokens": 34810,
+        "completion_tokens": 1465,
+        "total_tokens": 36275,
+        "cached_tokens": 1616,
+        "cache_creation_tokens": 0,
+        "reasoning_tokens": 427,
+        "estimated_input_tokens": 0,
+        "provider_reported_calls": 11,
+        "unreported_calls": 0,
+        "interrupted_calls": 0,
+        "auxiliary_calls": 1
+      },
+      "usage_complete": true,
+      "latency_seconds": 48.613,
+      "baseline_failed": true,
+      "baseline_verification_flaky": false,
+      "verification_flaky": false,
+      "turn_budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 10,
+        "tool_calls_used": 11,
+        "reported_usage": 36275,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "finish",
+        "phase_spent": {
+          "explore": 10816,
+          "implement": 10870,
+          "verify": 4213,
+          "review": 5655,
+          "finish": 4721
+        },
+        "review_attempts": 1,
+        "implementation_closed": false,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        },
+        "phase_available": 63725,
+        "phase_current_limit": 68446
+      },
+      "independent_verification_passed": true
+    },
+    {
+      "name": "typescript-safe-chunking",
+      "trial": 2,
+      "profile": "optimized",
+      "agent_state": "completed_verified",
+      "changed_files": [
+        "chunk.mjs"
+      ],
+      "unexpected_changes": [],
+      "tool_calls": 13,
+      "usage": {
+        "prompt_tokens": 36431,
+        "completion_tokens": 4679,
+        "total_tokens": 41110,
+        "cached_tokens": 1488,
+        "cache_creation_tokens": 0,
+        "reasoning_tokens": 3727,
+        "estimated_input_tokens": 0,
+        "provider_reported_calls": 11,
+        "unreported_calls": 0,
+        "interrupted_calls": 0,
+        "auxiliary_calls": 1
+      },
+      "usage_complete": true,
+      "latency_seconds": 104.249,
+      "baseline_failed": true,
+      "baseline_verification_flaky": false,
+      "verification_flaky": false,
+      "turn_budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 10,
+        "tool_calls_used": 13,
+        "reported_usage": 41110,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "finish",
+        "phase_spent": {
+          "explore": 11247,
+          "implement": 8435,
+          "verify": 8276,
+          "review": 8127,
+          "finish": 5025
+        },
+        "review_attempts": 1,
+        "implementation_closed": false,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        },
+        "phase_available": 58890,
+        "phase_current_limit": 63915
+      },
+      "independent_verification_passed": true
+    },
+    {
+      "name": "typescript-safe-chunking",
+      "trial": 3,
+      "profile": "optimized",
+      "agent_state": "completed_verified",
+      "changed_files": [
+        "chunk.mjs"
+      ],
+      "unexpected_changes": [],
+      "tool_calls": 13,
+      "usage": {
+        "prompt_tokens": 40598,
+        "completion_tokens": 4344,
+        "total_tokens": 44942,
+        "cached_tokens": 1993,
+        "cache_creation_tokens": 0,
+        "reasoning_tokens": 3134,
+        "estimated_input_tokens": 0,
+        "provider_reported_calls": 12,
+        "unreported_calls": 0,
+        "interrupted_calls": 0,
+        "auxiliary_calls": 1
+      },
+      "usage_complete": true,
+      "latency_seconds": 115.184,
+      "baseline_failed": true,
+      "baseline_verification_flaky": false,
+      "verification_flaky": false,
+      "turn_budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 11,
+        "tool_calls_used": 13,
+        "reported_usage": 44942,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "finish",
+        "phase_spent": {
+          "explore": 11204,
+          "implement": 12472,
+          "verify": 7926,
+          "review": 7997,
+          "finish": 5343
+        },
+        "review_attempts": 1,
+        "implementation_closed": false,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        },
+        "phase_available": 55058,
+        "phase_current_limit": 60401
+      },
+      "independent_verification_passed": true
+    },
+    {
+      "name": "python-layered-settings",
+      "trial": 1,
+      "profile": "optimized",
+      "agent_state": "blocked",
+      "changed_files": [
+        "settings/coerce.py",
+        "settings/loader.py"
+      ],
+      "unexpected_changes": [],
+      "tool_calls": 14,
+      "usage": {
+        "prompt_tokens": 36527,
+        "completion_tokens": 4520,
+        "total_tokens": 41047,
+        "cached_tokens": 1433,
+        "cache_creation_tokens": 0,
+        "reasoning_tokens": 2871,
+        "estimated_input_tokens": 0,
+        "provider_reported_calls": 8,
+        "unreported_calls": 0,
+        "interrupted_calls": 0,
+        "auxiliary_calls": 0
+      },
+      "usage_complete": true,
+      "latency_seconds": 84.331,
+      "baseline_failed": true,
+      "baseline_verification_flaky": false,
+      "verification_flaky": false,
+      "turn_budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 9,
+        "tool_calls_used": 14,
+        "reported_usage": 41047,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "implement",
+        "phase_spent": {
+          "explore": 10804,
+          "implement": 24114,
+          "verify": 6129
+        },
+        "review_attempts": 0,
+        "implementation_closed": true,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        },
+        "phase_available": 5886,
+        "phase_current_limit": 30000
+      },
+      "independent_verification_passed": false
+    },
+    {
+      "name": "python-layered-settings",
+      "trial": 2,
+      "profile": "optimized",
+      "agent_state": "blocked",
+      "changed_files": [
+        "settings/coerce.py",
+        "settings/loader.py"
+      ],
+      "unexpected_changes": [],
+      "tool_calls": 13,
+      "usage": {
+        "prompt_tokens": 44167,
+        "completion_tokens": 2852,
+        "total_tokens": 47019,
+        "cached_tokens": 4570,
+        "cache_creation_tokens": 0,
+        "reasoning_tokens": 1198,
+        "estimated_input_tokens": 0,
+        "provider_reported_calls": 10,
+        "unreported_calls": 0,
+        "interrupted_calls": 0,
+        "auxiliary_calls": 0
+      },
+      "usage_complete": true,
+      "latency_seconds": 58.624,
+      "baseline_failed": true,
+      "baseline_verification_flaky": false,
+      "verification_flaky": false,
+      "turn_budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 10,
+        "tool_calls_used": 13,
+        "reported_usage": 47019,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "implement",
+        "phase_spent": {
+          "explore": 16617,
+          "implement": 30402
+        },
+        "review_attempts": 0,
+        "implementation_closed": true,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        },
+        "phase_available": 0,
+        "phase_current_limit": 30000
+      },
+      "independent_verification_passed": true
+    },
+    {
+      "name": "python-layered-settings",
+      "trial": 3,
+      "profile": "optimized",
+      "agent_state": "completed_verified",
+      "changed_files": [
+        "settings/coerce.py",
+        "settings/loader.py"
+      ],
+      "unexpected_changes": [],
+      "tool_calls": 13,
+      "usage": {
+        "prompt_tokens": 36377,
+        "completion_tokens": 10418,
+        "total_tokens": 46795,
+        "cached_tokens": 3527,
+        "cache_creation_tokens": 0,
+        "reasoning_tokens": 8955,
+        "estimated_input_tokens": 0,
+        "provider_reported_calls": 9,
+        "unreported_calls": 0,
+        "interrupted_calls": 0,
+        "auxiliary_calls": 1
+      },
+      "usage_complete": true,
+      "latency_seconds": 171.261,
+      "baseline_failed": true,
+      "baseline_verification_flaky": false,
+      "verification_flaky": false,
+      "turn_budget": {
+        "step_limit": 25,
+        "tool_call_limit": 50,
+        "usage_limit": 100000,
+        "steps_used": 8,
+        "tool_calls_used": 13,
+        "reported_usage": 46795,
+        "estimated_usage": 0,
+        "usage_complete": true,
+        "reused_checks": 0,
+        "phase": "finish",
+        "phase_spent": {
+          "explore": 11480,
+          "implement": 5395,
+          "verify": 10521,
+          "review": 13210,
+          "finish": 6189
+        },
+        "review_attempts": 1,
+        "implementation_closed": false,
+        "phase_limits": {
+          "explore": 20000,
+          "implement": 30000,
+          "verify": 10000,
+          "review": 30000,
+          "finish": 10000
+        },
+        "phase_available": 53205,
+        "phase_current_limit": 59394
+      },
+      "independent_verification_passed": true
+    }
+  ]
+}

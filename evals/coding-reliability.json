@@ -1,0 +1,52 @@
+{
+  "kind": "coding-benchmark",
+  "schema_version": 1,
+  "name": "apsara-coding-reliability",
+  "description": "Focused repeats of Node chunking and multi-file settings using the existing core tasks, limits, and acceptance gates.",
+  "agent_timeout": 600,
+  "verification_repeats": 2,
+  "thresholds": {
+    "min_pass_rate": 0.8,
+    "max_verification_flaky_trials": 0,
+    "max_unstable_cases": 0,
+    "max_unsafe_trials": 0
+  },
+  "cases": [
+    {
+      "name": "typescript-safe-chunking",
+      "language": "typescript",
+      "fixture": "fixtures/typescript-safe-chunking",
+      "instruction": "Fix chunk.mjs so the Node test suite passes, including invalid sizes and trailing items. Do not modify tests.",
+      "verify": [
+        [
+          "node",
+          "test.mjs"
+        ]
+      ],
+      "allowed_changes": [
+        "chunk.mjs"
+      ],
+      "max_tool_calls": 12,
+      "max_tokens": 50000
+    },
+    {
+      "name": "python-layered-settings",
+      "language": "python",
+      "fixture": "fixtures/python-layered-settings",
+      "instruction": "Fix the layered settings package so all tests pass. Implement type coercion in settings/coerce.py and precedence-safe merging in settings/loader.py. Preserve the responsibilities of both modules, do not mutate the defaults, ignore unknown APP_ environment keys, and do not modify tests.",
+      "verify": [
+        [
+          "python3",
+          "-m",
+          "unittest",
+          "-q"
+        ]
+      ],
+      "allowed_changes": [
+        "settings/*.py"
+      ],
+      "max_tool_calls": 20,
+      "max_tokens": 75000
+    }
+  ]
+}

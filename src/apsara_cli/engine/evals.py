@@ -400,6 +400,50 @@ def compare_benchmark_results(optimized_path: Path, reference_path: Path) -> dic
                 "sample_count": len(known), "status": "measured"} if known else {"value": None, "sample_count": 0, "status": "unknown"}
     def verified(row):
         return _verification_passed(row.get("verification_runs") or [row.get("verification") or []]) and not row.get("verification_flaky")
+    def qualified(row):
+        return (row.get("agent_state") in {"completed", "completed_verified"} and verified(row)
+                and row.get("baseline_failed") is True and not row.get("baseline_verification_flaky")
+                and bool(row.get("changed_files")) and not row.get("unexpected_changes"))
+    def successful_work(rows):
+        successes = [row for row in rows if qualified(row)]
+        totals = [_complete_usage_total(row) for row in rows]
+        measured = [row for row in successes if _complete_usage_total(row) is not None]
+        return {
+            "completed_trials": len(successes), "measured_completed_trials": len(measured),
+            "total_tokens": average([_complete_usage_total(row) for row in successes]),
+            "latency_seconds": metric(measured, "latency_seconds"),
+            # Failures consume tokens too. Do not hide that cost in the mean
+            # of only the lucky successful runs, or mix incomplete totals in.
+            "all_trial_tokens_per_completion": (
+                round(sum(totals) / len(successes), 3)
+                if successes and all(value is not None for value in totals) else None
+            ),
+        }
+    def pair_key(row):
+        trial = row.get("trial")
+        return (row.get("name"), trial) if isinstance(trial, int) and not isinstance(trial, bool) and trial > 0 else None
+    keys_left, keys_right = Counter(pair_key(r) for r in left), Counter(pair_key(r) for r in right)
+    right_by_key = {pair_key(r): r for r in right if keys_right[pair_key(r)] == 1}
+    pairs = []
+    for row in left:
+        key = pair_key(row)
+        other = right_by_key.get(key)
+        if key is None or keys_left[key] != 1 or other is None or not (qualified(row) and qualified(other)):
+            continue
+        opt, ref = _complete_usage_total(row), _complete_usage_total(other)
+        if opt is not None and ref is not None:
+            pairs.append({"case": key[0], "trial": key[1], "optimized_tokens": opt, "reference_tokens": ref})
+    covered = Counter(p["case"] for p in pairs)
+    sufficient = bool(covered) and all(covered[name] >= 3 for name in {r.get("name") for r in left})
+    matched = {
+        "sample_count": len(pairs), "pairs": pairs,
+        "optimized_tokens": average([p["optimized_tokens"] for p in pairs]),
+        "reference_tokens": average([p["reference_tokens"] for p in pairs]),
+        "observed_savings_percent": (round(100 * (1 - sum(p["optimized_tokens"] for p in pairs)
+            / sum(p["reference_tokens"] for p in pairs)), 3) if pairs else None),
+        "status": "repeated_matched_samples" if sufficient else "insufficient_repeated_samples",
+        "scope": "Successful, constrained, independently verified repairs with complete usage; matched by case and trial. Not a general causal claim.",
+    }
     def summary(rows):
         return {
             "verified_success_rate": round(sum(verified(row) for row in rows) / len(rows), 4),
@@ -416,6 +460,8 @@ def compare_benchmark_results(optimized_path: Path, reference_path: Path) -> dic
         "total_tokens": {"optimized": average(left_tokens), "reference": average(right_tokens)},
         "unknown_usage_trials": {"optimized": sum(value is None for value in left_tokens), "reference": sum(value is None for value in right_tokens)},
         "outcomes": {"optimized": summary(left), "reference": summary(right)},
+        "successful_work": {"optimized": successful_work(left), "reference": successful_work(right)},
+        "matched_successful_work": matched,
         "quality_claim": "pass rates are reported; no quality improvement is claimed without comparable measured samples",
     }
 
@@ -783,6 +829,8 @@ async def run_benchmark_suite(
             else:
                 agent_state = str(terminal_states[-1] if terminal_states else "unknown")
             final_flaky = verification_is_flaky(verification_runs)
+            from apsara_cli.engine.runtime import latest_run
+            turn_budget = (latest_run(workspace) or {}).get("budget") or {}
             details = {
                 "name": name,
                 "language": case.get("language"),
@@ -807,12 +855,13 @@ async def run_benchmark_suite(
                 "latency_seconds": round(latency, 3),
                 "unexpected_changes": [],
                 "request_context": [event for event in events if event.get("type") == "request_context"],
+                "turn_budget": turn_budget,
                 "usage_complete": bool(aggregate_usage.get("total_tokens")) and not any(
                     aggregate_usage.get(key) for key in ("unreported_calls", "interrupted_calls")
                 ) and aggregate_usage.get("provider_reported_calls", 0) >= (
                     sum(event.get("type") == "request_context" for event in events)
                     + aggregate_usage.get("auxiliary_calls", 0)
-                ),
+                ) and turn_budget.get("usage_complete", True),
             }
             details["unexpected_changes"] = _unexpected_changes(case, details)
             evidence_cases.append(details)

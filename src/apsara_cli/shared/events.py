@@ -165,6 +165,23 @@ def _tool_result_summary(tool_name: str, result: str) -> tuple[bool, str]:
 
 def print_event(event: dict[str, Any], ui: "ConsoleUI") -> None:
     event_type = event.get("type")
+    ui.on_agent_event(event)
+
+    if event_type == "budget":
+        budget = dict(event.get("data") or {})
+        ui._run_budget = budget
+        fractions = [
+            budget.get("steps_used", 0) / max(1, budget.get("step_limit", 1)),
+            budget.get("tool_calls_used", 0) / max(1, budget.get("tool_call_limit", 1)),
+            (budget.get("reported_usage", 0) + budget.get("estimated_usage", 0))
+            / max(1, budget.get("usage_limit", 1)),
+        ]
+        if max(fractions) >= .8 and not ui._budget_warning_shown:
+            ui._budget_warning_shown = True
+            ui.warning("This turn is approaching its budget. Use /budget to inspect usage and limits.")
+        if hasattr(ui, "_invalidate"):
+            ui._invalidate()
+        return
 
     if event_type == "plan":
         steps = event.get("steps") or []
@@ -180,9 +197,9 @@ def print_event(event: dict[str, Any], ui: "ConsoleUI") -> None:
         elif state == "completed_unverified":
             ui.warning("Unverified completion — changes require independent checks.")
         if state == "verifying":
-            ui.update_spinner_action("Apsara is verifying")
+            ui.update_spinner_action("Makor is verifying")
             ui.work_notice_shown = False
-            ui.note_working("Apsara is verifying")
+            ui.note_working("Makor is verifying")
         ui.hide_event("state", f"Run state: {state}", str(event.get("objective", "")))
         return
 
@@ -194,8 +211,8 @@ def print_event(event: dict[str, Any], ui: "ConsoleUI") -> None:
         return
 
     if event_type == "status":
-        message = str(event.get("message", "")).strip() or "Apsara is thinking"
-        normalized = "Apsara is thinking" if "thinking" in message.lower() else "Apsara is working"
+        message = str(event.get("message", "")).strip() or "Makor is thinking"
+        normalized = "Makor is thinking" if "thinking" in message.lower() else "Makor is working"
         ui.note_working(normalized)
         ui.hide_event("status", message, message)
         return
@@ -251,11 +268,11 @@ def print_event(event: dict[str, Any], ui: "ConsoleUI") -> None:
         ui.tool_result_activity(tool_name, success, summary)
 
         # Resume spinner for next step
-        ui.update_spinner_action("Apsara is working")
+        ui.update_spinner_action("Makor is working")
         ui.note_working()
         # Reset work_notice_shown so spinner restarts fresh
         ui.work_notice_shown = False
-        ui.start_spinner("Apsara is working")
+        ui.start_spinner("Makor is working")
 
         ui.hide_event(
             "result",

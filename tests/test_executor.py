@@ -391,6 +391,11 @@ def test_mutation_after_full_verification_requires_fresh_full_verification():
         [_tool_call_event(name="verify_project", arguments='{"phase":"full"}', call_id="full-2")],
         [_final_event("Done with fresh verification.")],
     ]
+    # This test isolates evidence freshness. Unknown-usage reservations and
+    # repeated phase exhaustion have separate resource-limit regressions.
+    for script in scripts:
+        for event in script:
+            event["usage"] = {"total_tokens": 100}
     fake, state = _scripted_llm(scripts)
 
     async def execute(name, _arguments):

@@ -1,0 +1,292 @@
+{
+  "schema_version": 2,
+  "suite": "apsara-pinned-repository-regressions",
+  "suite_digest": "e5608f0b413ebbb8d49823cabff28abea750285ed32fe14acfff0d3813ca3838",
+  "model": "bunny",
+  "created_at": "2026-10-04T12:59:47.957702+00:00",
+  "repeat_count": 3,
+  "aggregate": {
+    "passed": false,
+    "thresholds": {
+      "min_pass_rate": 1.0,
+      "max_verification_flaky_trials": 0,
+      "max_unstable_cases": 0,
+      "max_unsafe_trials": 0
+    },
+    "trials": 12,
+    "passed_trials": 1,
+    "pass_rate": 0.0833,
+    "verification_flaky_trials": 0,
+    "unstable_cases": 1,
+    "unsafe_trials": 0,
+    "scores": {
+      "average": 48.75,
+      "variance": 842.1875,
+      "minimum": 20,
+      "maximum": 90
+    },
+    "tool_calls": {
+      "average": 15.6667,
+      "variance": 7.3889,
+      "minimum": 12,
+      "maximum": 21
+    },
+    "tokens": {
+      "average": 91816.8333,
+      "variance": 18030119.9722,
+      "minimum": 80669,
+      "maximum": 96676,
+      "sample_count": 12,
+      "unknown_trials": 0
+    },
+    "failure_categories": {
+      "agent_state": 11,
+      "no_changes": 6,
+      "token_budget": 6,
+      "unstable_case": 1,
+      "verification_failed": 6
+    },
+    "cases": [
+      {
+        "name": "boltons-chunk-contract",
+        "language": "python",
+        "trials": 6,
+        "passed_trials": 1,
+        "pass_rate": 0.1667,
+        "average_score": 77.5,
+        "unstable": true
+      },
+      {
+        "name": "more-itertools-shared-chunk-contract",
+        "language": "python",
+        "trials": 6,
+        "passed_trials": 0,
+        "pass_rate": 0.0,
+        "average_score": 20,
+        "unstable": false
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "boltons-chunk-contract",
+      "language": "python",
+      "trial": 1,
+      "profile": "optimized",
+      "agent_state": "blocked",
+      "changed_files": [
+        "boltons/iterutils.py"
+      ],
+      "unexpected_changes": [],
+      "tool_calls": 16,
+      "usage_complete": true,
+      "latency_seconds": 211.681,
+      "verification_flaky": false,
+      "baseline_failed": true,
+      "reported_tokens": 89430,
+      "verification_passed": true
+    },
+    {
+      "name": "boltons-chunk-contract",
+      "language": "python",
+      "trial": 1,
+      "profile": "reference",
+      "agent_state": "blocked",
+      "changed_files": [
+        "boltons/iterutils.py"
+      ],
+      "unexpected_changes": [],
+      "tool_calls": 13,
+      "usage_complete": true,
+      "latency_seconds": 74.901,
+      "verification_flaky": false,
+      "baseline_failed": true,
+      "reported_tokens": 96676,
+      "verification_passed": true
+    },
+    {
+      "name": "boltons-chunk-contract",
+      "language": "python",
+      "trial": 2,
+      "profile": "reference",
+      "agent_state": "blocked",
+      "changed_files": [
+        "boltons/iterutils.py"
+      ],
+      "unexpected_changes": [],
+      "tool_calls": 16,
+      "usage_complete": true,
+      "latency_seconds": 56.411,
+      "verification_flaky": false,
+      "baseline_failed": true,
+      "reported_tokens": 96501,
+      "verification_passed": true
+    },
+    {
+      "name": "boltons-chunk-contract",
+      "language": "python",
+      "trial": 2,
+      "profile": "optimized",
+      "agent_state": "completed_verified",
+      "changed_files": [
+        "boltons/iterutils.py"
+      ],
+      "unexpected_changes": [],
+      "tool_calls": 12,
+      "usage_complete": true,
+      "latency_seconds": 129.852,
+      "verification_flaky": false,
+      "baseline_failed": true,
+      "reported_tokens": 91352,
+      "verification_passed": true
+    },
+    {
+      "name": "boltons-chunk-contract",
+      "language": "python",
+      "trial": 3,
+      "profile": "optimized",
+      "agent_state": "blocked",
+      "changed_files": [
+        "boltons/iterutils.py"
+      ],
+      "unexpected_changes": [],
+      "tool_calls": 15,
+      "usage_complete": true,
+      "latency_seconds": 132.342,
+      "verification_flaky": false,
+      "baseline_failed": true,
+      "reported_tokens": 94628,
+      "verification_passed": true
+    },
+    {
+      "name": "boltons-chunk-contract",
+      "language": "python",
+      "trial": 3,
+      "profile": "reference",
+      "agent_state": "blocked",
+      "changed_files": [
+        "boltons/iterutils.py"
+      ],
+      "unexpected_changes": [],
+      "tool_calls": 15,
+      "usage_complete": true,
+      "latency_seconds": 56.535,
+      "verification_flaky": false,
+      "baseline_failed": true,
+      "reported_tokens": 93897,
+      "verification_passed": true
+    },
+    {
+      "name": "more-itertools-shared-chunk-contract",
+      "language": "python",
+      "trial": 1,
+      "profile": "optimized",
+      "agent_state": "blocked",
+      "changed_files": [],
+      "unexpected_changes": [],
+      "tool_calls": 18,
+      "usage_complete": true,
+      "latency_seconds": 116.573,
+      "verification_flaky": false,
+      "baseline_failed": true,
+      "reported_tokens": 88110,
+      "verification_passed": false
+    },
+    {
+      "name": "more-itertools-shared-chunk-contract",
+      "language": "python",
+      "trial": 1,
+      "profile": "reference",
+      "agent_state": "blocked",
+      "changed_files": [],
+      "unexpected_changes": [],
+      "tool_calls": 13,
+      "usage_complete": true,
+      "latency_seconds": 64.151,
+      "verification_flaky": false,
+      "baseline_failed": true,
+      "reported_tokens": 80669,
+      "verification_passed": false
+    },
+    {
+      "name": "more-itertools-shared-chunk-contract",
+      "language": "python",
+      "trial": 2,
+      "profile": "reference",
+      "agent_state": "blocked",
+      "changed_files": [],
+      "unexpected_changes": [],
+      "tool_calls": 16,
+      "usage_complete": true,
+      "latency_seconds": 57.178,
+      "verification_flaky": false,
+      "baseline_failed": true,
+      "reported_tokens": 89728,
+      "verification_passed": false
+    },
+    {
+      "name": "more-itertools-shared-chunk-contract",
+      "language": "python",
+      "trial": 2,
+      "profile": "optimized",
+      "agent_state": "blocked",
+      "changed_files": [],
+      "unexpected_changes": [],
+      "tool_calls": 20,
+      "usage_complete": true,
+      "latency_seconds": 82.437,
+      "verification_flaky": false,
+      "baseline_failed": true,
+      "reported_tokens": 94204,
+      "verification_passed": false
+    },
+    {
+      "name": "more-itertools-shared-chunk-contract",
+      "language": "python",
+      "trial": 3,
+      "profile": "optimized",
+      "agent_state": "blocked",
+      "changed_files": [],
+      "unexpected_changes": [],
+      "tool_calls": 21,
+      "usage_complete": true,
+      "latency_seconds": 163.435,
+      "verification_flaky": false,
+      "baseline_failed": true,
+      "reported_tokens": 93013,
+      "verification_passed": false
+    },
+    {
+      "name": "more-itertools-shared-chunk-contract",
+      "language": "python",
+      "trial": 3,
+      "profile": "reference",
+      "agent_state": "blocked",
+      "changed_files": [],
+      "unexpected_changes": [],
+      "tool_calls": 13,
+      "usage_complete": true,
+      "latency_seconds": 35.511,
+      "verification_flaky": false,
+      "baseline_failed": true,
+      "reported_tokens": 93594,
+      "verification_passed": false
+    }
+  ],
+  "source_digest": "f18c2cf9e519f46f21eed2b6616b2e2de1c4970ebc03e9f024739360cd2b8677",
+  "limits": {
+    "steps": 25,
+    "tool_calls": 50,
+    "tokens": 100000
+  },
+  "dependencies": {
+    "apsara-agentic": "0.1.0a2",
+    "litellm": "1.104.0",
+    "openai": "2.54.0",
+    "mcp": "2.3.0",
+    "httpx2": "2.13.1",
+    "httpcore2": "2.13.1",
+    "PyJWT": "2.15.1",
+    "urllib3": "2.8.0"
+  }
+}

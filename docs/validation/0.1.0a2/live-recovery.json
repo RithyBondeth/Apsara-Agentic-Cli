@@ -1,0 +1,38 @@
+{
+  "model": "bunny",
+  "paid_fallbacks": false,
+  "interrupted_state": "cancelled",
+  "changes_preserved": true,
+  "resumed_state": "completed",
+  "changed_files": [
+    "dedupe.py"
+  ],
+  "budgets": [
+    {
+      "step_limit": 25,
+      "tool_call_limit": 50,
+      "usage_limit": 100000,
+      "steps_used": 4,
+      "tool_calls_used": 6,
+      "reported_usage": 12552,
+      "estimated_usage": 0,
+      "usage_complete": true,
+      "reused_checks": 0
+    },
+    {
+      "step_limit": 25,
+      "tool_call_limit": 50,
+      "usage_limit": 100000,
+      "steps_used": 3,
+      "tool_calls_used": 3,
+      "reported_usage": 13517,
+      "estimated_usage": 0,
+      "usage_complete": true,
+      "reused_checks": 0
+    }
+  ],
+  "rollback_verified": true,
+  "source_digest": "0daaea4aab1da3442de115781ec5b514dd0e79cd8c39d00767465951aaa4ffd2",
+  "independent_verification_passed_twice": true,
+  "rollback_conflicts": 0
+}

@@ -29,6 +29,7 @@ except ImportError:
     msvcrt = None
 
 from apsara_cli.shared.text import format_rich_text_lines, truncate_text
+from apsara_cli.shared.mascot import Makor, ascii_required
 
 
 # ── Terminal helpers ──────────────────────────────────────────────────────────
@@ -299,6 +300,7 @@ class ConsoleUI:
         self.approve_all = auto_approve
         self.typing_delay = typing_delay if sys.stdout.isatty() and not os.environ.get("CI") else 0.0
         self.theme = theme or DEFAULT_THEME
+        self.mascot = Makor()
 
         self.hidden_events: list[Any] = []
         self.latest_hidden_events: list[Any] = []
@@ -331,15 +333,29 @@ class ConsoleUI:
         self._session_uses_promotional_pricing: bool = False
         self._context_tokens: int = 0
         self._context_budget: int = 0
+        self._run_budget: dict[str, Any] = {}
+        self._budget_warning_shown = False
 
-        self.spinner_message = "Apsara is working"
+        self.spinner_message = "Makor is working"
         self.spinner_stop_event = threading.Event()
         self.spinner_thread: Optional[threading.Thread] = None
         self.spinner_lock = threading.Lock()
         self._spinner_start_time: float = 0.0
         self._spinner_frame_index: int = 0
         self._spinner_color_index: int = 0
+        self._spinner_rows: int = 0
         self._stream_buffer: list[str] = []
+
+    def _mascot_changed(self) -> None:
+        """TUI subclasses repaint without writing into the transcript."""
+
+    def set_mascot_state(self, state: str) -> None:
+        if self.mascot.set_state(state):
+            self._mascot_changed()
+
+    def on_agent_event(self, event: dict[str, Any]) -> None:
+        if self.mascot.observe(event):
+            self._mascot_changed()
 
     def _ensure_log_file(self) -> None:
         if self._logging_attempted:
@@ -685,11 +701,36 @@ class ConsoleUI:
         frame_idx = 0
         while not self.spinner_stop_event.is_set():
             with self.spinner_lock:
-                sys.stdout.write(f"\r\033[2K  {self.compose_spinner_line(frame_idx)}")
+                lines = self.compose_activity_lines(frame_idx)
+                sys.stdout.write("\r" + (f"\033[{self._spinner_rows - 1}A" if self._spinner_rows > 1 else ""))
+                sys.stdout.write("\n".join("\033[2K" + line for line in lines))
+                self._spinner_rows = len(lines)
                 sys.stdout.flush()
             frame_idx += 1
             if self.spinner_stop_event.wait(0.08):
                 break
+
+    def compose_activity_lines(self, frame_idx: int = 0) -> list[str]:
+        """Place the compact head directly beside the current activity text."""
+        if not self.mascot.enabled:
+            return [f"  {self.compose_spinner_line(frame_idx)}"]
+        from rich.text import Text
+
+        head = self.mascot.render_head(color=self.use_color, ascii_only=ascii_required())
+        message = self.spinner_message
+        if self.mascot.state in {"waiting", "retrying", "verifying", "speaking"}:
+            message = self.mascot.label(ascii_only=True).split(" | ", 1)[1]
+        elapsed = time.monotonic() - self._spinner_start_time if self._spinner_start_time else 0
+        text = Text(message, style="rgb(190,195,210)" if self.use_color else None)
+        if elapsed >= 2 and self.mascot.state not in {"waiting", "retrying"}:
+            text.append(f" {elapsed:.0f}s", style="rgb(130,125,140)" if self.use_color else None)
+        text.truncate(max(1, self.content_width() - 11), overflow="ellipsis")
+        if ascii_required():
+            text = Text(text.plain.replace("…", "."))
+        # Text aligns with the face on the lower of the two small icon rows.
+        label = self.style(text.plain, "38;2;190;195;210")
+        return ["  " + line + ("  " + label if index == 1 else "")
+                for index, line in enumerate(head)]
 
     def start_spinner(self, message: str) -> None:
         self.spinner_message = message
@@ -699,6 +740,7 @@ class ConsoleUI:
         if self.spinner_thread and self.spinner_thread.is_alive():
             return
         self._spinner_start_time = time.monotonic()
+        self._spinner_rows = 0
         self.spinner_stop_event.clear()
         self.spinner_thread = threading.Thread(target=self._spinner_worker, daemon=True)
         self.spinner_thread.start()
@@ -709,15 +751,20 @@ class ConsoleUI:
         self.spinner_stop_event.set()
         self.spinner_thread.join(timeout=0.3)
         with self.spinner_lock:
-            sys.stdout.write("\r\033[2K")
+            sys.stdout.write("\r" + (f"\033[{self._spinner_rows - 1}A" if self._spinner_rows > 1 else ""))
+            sys.stdout.write("\n".join("\033[2K" for _ in range(max(1, self._spinner_rows))))
+            if self._spinner_rows > 1:
+                sys.stdout.write(f"\033[{self._spinner_rows - 1}A")
+            sys.stdout.write("\r")
             sys.stdout.flush()
+        self._spinner_rows = 0
         self.spinner_thread = None
 
     def update_spinner_action(self, action: str) -> None:
         with self.spinner_lock:
             self.spinner_message = action
 
-    def note_working(self, message: str = "Apsara is working") -> None:
+    def note_working(self, message: str = "Makor is working") -> None:
         if self.work_notice_shown:
             return
         self.start_spinner(message)
@@ -1033,15 +1080,24 @@ class ConsoleUI:
 
     def begin_turn(self) -> None:
         self.stop_spinner()
+        self.spinner_message = "Makor is thinking"
+        self._spinner_start_time = time.monotonic()
+        self.last_run_state = "running"
+        self.mascot.begin_turn()
+        self._mascot_changed()
         self.current_turn_hidden_events = []
         self.work_notice_shown = False
         self._turn_outcome = ""
         self._thought_pending = True
         self._turn_started_at = time.monotonic()
+        self._run_budget = {}
+        self._budget_warning_shown = False
 
     def finish_turn(self, model_label: Optional[str] = None, mode: str = "Build") -> None:
         """Record turn details and surface only outcomes that need attention."""
         self.stop_spinner()
+        self.mascot.finish_turn(self._turn_outcome, getattr(self, "last_run_state", "completed"))
+        self._mascot_changed()
         self.latest_hidden_events = list(self.current_turn_hidden_events)
         count = len(self.latest_hidden_events)
 

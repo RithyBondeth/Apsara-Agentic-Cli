@@ -2,6 +2,7 @@
 import sys
 import os
 import tempfile
+import pytest
 from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -196,3 +197,36 @@ def test_search_files_no_match(tmp_path):
     with _ctx(tmp_path):
         result = search_files("zzznotfound")
     assert "No matches" in result or result.strip() == ""
+
+
+@pytest.mark.parametrize('pattern,expected', [('def take|def chunked', ('def take','def chunked')), (r'take\(', ('take(',))])
+def test_search_fallback_preserves_common_regex_behavior(monkeypatch,tmp_path,pattern,expected):
+    from apsara_cli.engine import tools
+    actual = tools.subprocess.run
+    def without_rg(command, **kwargs):
+        if command[0]=='rg':
+            raise FileNotFoundError('rg not installed')
+        return actual(command, **kwargs)
+    monkeypatch.setattr(tools.subprocess,'run',without_rg)
+    (tmp_path/'app.py').write_text('def take(n): pass\ndef chunked(n): pass\n')
+    with agent_runtime_context(workspace_root=tmp_path):
+        result=search_files(pattern)
+    assert not result.startswith('Error')
+    assert all(text in result for text in expected)
+
+
+def test_search_fallback_does_not_search_agent_state_or_dependencies(monkeypatch,tmp_path):
+    from apsara_cli.engine import tools
+    actual=tools.subprocess.run
+    def without_rg(command,**kwargs):
+        if command[0]=='rg':raise FileNotFoundError('rg not installed')
+        return actual(command,**kwargs)
+    monkeypatch.setattr(tools.subprocess,'run',without_rg)
+    for directory in ('.apsara','node_modules','.venv'):
+        p=tmp_path/directory
+        p.mkdir()
+        (p/'private.txt').write_text('needle')
+    (tmp_path/'app.py').write_text('needle')
+    with agent_runtime_context(workspace_root=tmp_path):
+        result=search_files('needle')
+    assert 'app.py' in result and 'private.txt' not in result

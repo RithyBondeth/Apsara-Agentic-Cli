@@ -430,6 +430,7 @@ _HELP_SECTIONS: list[tuple[str, list[tuple[str, str, str]]]] = [
         ("/history", "", "Show recent conversation turns"),
         ("/details", "", "Reveal the agent's internal steps from the last turn"),
         ("/clear", "", "Clear the in-memory conversation history"),
+        ("/mascot", "[on|off|still|animate]", "Show Makor or control mascot motion"),
     ]),
     ("Models & keys", [
         ("/model", "", "Show the current model"),
@@ -442,6 +443,7 @@ _HELP_SECTIONS: list[tuple[str, list[tuple[str, str, str]]]] = [
     ("Session", [
         ("/status", "", "Token usage, context health, session cost"),
         ("/usage", "", "Local token totals by model and saved session"),
+        ("/budget", "", "Current turn usage and model/tool/token limits"),
         ("/save", "", "Save the current session now"),
         ("/session", "", "Show session and workspace details"),
         ("/sessions", "", "List all saved sessions"),
@@ -519,6 +521,24 @@ def handle_chat_command(
         print_chat_help(ui)
         return True, current_model
 
+    if command_text == "/mascot" or command_text.startswith("/mascot "):
+        choice = command_text[len("/mascot"):].strip().lower()
+        if choice == "on":
+            ui.mascot.enabled = True
+        elif choice == "off":
+            ui.mascot.enabled = False
+        elif choice == "still":
+            ui.mascot.animation = False
+        elif choice == "animate":
+            ui.mascot.animation = not os.environ.get("CI") and os.environ.get("TERM") != "dumb"
+        elif choice:
+            ui.error("Usage: /mascot [on|off|still|animate]")
+            return True, current_model
+        ui.info(f"Makor is {'visible' if ui.mascot.enabled else 'hidden'} · "
+                f"{'animated' if ui.mascot.animation else 'still'}.")
+        ui._mascot_changed()
+        return True, current_model
+
     if command_text == "/details":
         ui.show_hidden_events()
         return True, current_model
@@ -557,6 +577,30 @@ def handle_chat_command(
         snapshot = ui.usage_snapshot() if hasattr(ui, "usage_snapshot") else {}
         ui.info("Usage summary")
         ui.print_block(format_usage_report(options.workspace_root, snapshot))
+        return True, current_model
+
+    if command_text == "/budget":
+        from apsara_cli.engine.budget import TurnBudget
+        from apsara_cli.engine.executor import _max_steps
+        from apsara_cli.engine.runtime import latest_run
+        latest = latest_run(options.workspace_root) or {}
+        budget = ui._run_budget or latest.get("budget") or TurnBudget.from_environment(_max_steps()).as_dict()
+        ui.print_block(
+            f"Model steps: {budget['steps_used']}/{budget['step_limit']}\n"
+            f"Tool calls: {budget['tool_calls_used']}/{budget['tool_call_limit']}\n"
+            f"Provider-reported tokens: {budget['reported_usage']:,}\n"
+            f"Reserved estimated usage: {budget['estimated_usage']:,}\n"
+            f"Turn token limit: {budget['usage_limit']:,}\n"
+            f"Complete provider usage: {budget['usage_complete']}\n"
+            f"Reused results: {budget['reused_checks']}\n\n"
+            f"Current phase: {budget.get('phase', 'unknown')}\n"
+            f"Available in current phase: {budget.get('phase_available', 'unknown')}\n"
+            f"Phase allowances: {budget.get('phase_limits', {})}\n"
+            f"Phase usage (reported plus reserved): {budget.get('phase_spent', {})}\n"
+            f"Review attempts: {budget.get('review_attempts', 0)}\n\n"
+            "Set APSARA_MAX_STEPS, APSARA_MAX_TOOL_CALLS, and APSARA_MAX_TURN_TOKENS before launching.\n"
+            "Token enforcement uses local request estimates; this is not a provider billing cap."
+        )
         return True, current_model
 
     if command_text == "/checkpoints":
@@ -1191,6 +1235,7 @@ async def execute_instruction(
         if not selectable:
             ui.error(reason)
             ui.last_run_state = "failed"
+            ui.set_mascot_state("error")
             return list(history), None
 
     next_history = list(history)
@@ -1258,6 +1303,7 @@ async def execute_instruction(
                     print_event(event, ui)
                     update_history_from_event(next_history, event)
         except asyncio.CancelledError:
+            ui.set_mascot_state("cancelled")
             # Completed calls may already have provider totals; retain them,
             # then record the in-flight request separately as an estimate.
             if aggregate_usage:
@@ -1332,6 +1378,7 @@ async def run_once(args: object, config: object) -> int:
         config_theme.apply_to(theme)
 
     ui = ConsoleUI(use_color=options.use_color, auto_approve=options.auto_approve, theme=theme)
+    ui.mascot.configure(config.ui)
     history: list[dict[str, Any]] = []
 
     if not options.stateless:
@@ -1372,6 +1419,7 @@ async def chat_loop(args: object, config: object) -> int:
         config_theme.apply_to(theme)
 
     ui = ConsoleUI(use_color=options.use_color, auto_approve=options.auto_approve, theme=theme)
+    ui.mascot.configure(config.ui)
     history: list[dict[str, Any]] = []
     current_model = options.model
     turn_count = 0

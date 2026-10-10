@@ -1,4 +1,5 @@
 import asyncio
+import threading
 from io import StringIO
 import pytest
 
@@ -219,5 +220,147 @@ def test_tui_color_choice_controls_rendered_output_with_no_color_env(monkeypatch
             assert bool("38;2;" in emitted or "48;2;" in emitted) is colored
             pipe.send_text("\x04")
             assert await asyncio.wait_for(task, 2) == 0
+
+    asyncio.run(exercise())
+
+
+def test_makor_tracks_live_turn_approval_resize_failure_and_interrupt(monkeypatch, tmp_path):
+    from apsara_cli.shared.events import print_event
+
+    monkeypatch.setenv("TERM", "xterm-256color")
+    monkeypatch.setenv("OPENCODE_API_KEY", "mascot-test")
+    monkeypatch.setattr(tui.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr("apsara_cli.cli.chat._load_stored_keys", lambda: None)
+    captured = {}
+    gates = [threading.Event() for _ in range(4)]
+
+    def make_app(**kwargs):
+        captured["app"] = Application(**kwargs)
+        return captured["app"]
+
+    async def gate(index):
+        while not gates[index].is_set():
+            await asyncio.sleep(.01)
+
+    async def execute(instruction, model, history, options, ui):
+        captured["ui"] = ui
+        ui.begin_turn()
+        if instruction == "fail":
+            raise RuntimeError("demo failure")
+        if instruction == "interrupt":
+            captured["interrupt_started"] = True
+            await asyncio.Event().wait()
+        print_event({"type": "status", "message": "Makor is thinking"}, ui)
+        await gate(0)
+        print_event({"type": "tool_call", "name": "read_file", "arguments": {"path": "demo.py"}}, ui)
+        await gate(1)
+        assert ui.confirm_action("write_to_file", {"path": "demo.py", "content": "demo"})
+        print_event({"type": "run_state", "state": "verifying"}, ui)
+        await gate(2)
+        print_event({"type": "response_start"}, ui)
+        print_event({"type": "text_chunk", "content": "A simulated response."}, ui)
+        await gate(3)
+        print_event({"type": "response_end"}, ui)
+        print_event({"type": "run_state", "state": "completed_unverified"}, ui)
+        print_event({"type": "final_answer", "content": "Please verify the changes."}, ui)
+        ui.finish_turn()
+        return [*history, {"role": "user", "content": instruction},
+                {"role": "assistant", "content": "Please verify the changes."}], None
+
+    monkeypatch.setattr(tui, "Application", make_app)
+    monkeypatch.setattr(tui, "execute_instruction", execute)
+    args = build_parser().parse_args([
+        "chat", "--workspace", str(tmp_path), "--model", "bunny", "--stateless", "--color",
+    ])
+    config = load_cli_config(str(tmp_path / "config.toml"), str(tmp_path))
+
+    def rows():
+        screen = captured["app"].renderer._last_screen
+        return ["".join(c.char for _, c in sorted(row.items()))
+                for _, row in sorted(screen.data_buffer.items())] if screen else []
+
+    async def visible(text):
+        for _ in range(200):
+            if "app" in captured and any(text in row for row in rows()):
+                return
+            await asyncio.sleep(.01)
+        raise AssertionError(f"Makor never displayed {text!r}: {rows()}")
+
+    async def exercise():
+        size = {"rows": 36, "columns": 144}
+        output = Vt100_Output(StringIO(), lambda: Size(**size), enable_cpr=False)
+        with create_pipe_input() as pipe, create_app_session(input=pipe, output=output):
+            task = asyncio.create_task(tui.tui_loop(args, config))
+            try:
+                await visible("OpenCode Zen")
+                assert not any("Makor ·" in row for row in rows())
+                pipe.send_text("demo\r")
+                await visible("Makor is thinking")
+                activity_row = next(row for row in rows() if "Makor is thinking" in row)
+                assert any(char in activity_row[:9] for char in "▀▄█")
+                assert not any(char in activity_row for char in "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
+                assert activity_row.index("Makor is thinking") == 9  # Beside the tiny head in the transcript.
+                app = captured["app"]
+                size["columns"] = 80
+                app.invalidate()
+                for _ in range(200):
+                    if not any("◍ Context" in row for row in rows()):
+                        break
+                    await asyncio.sleep(.01)
+                await visible("Makor is thinking")
+                assert not any("◍ Context" in row for row in rows())
+                size["columns"] = 144
+                app.invalidate()
+                await visible("◍ Context")
+                gates[0].set()
+                await visible('reading "demo.py"')
+                gates[1].set()
+                await visible("Awaiting approval")
+                pipe.send_text("y")
+                await visible("Checking changes")
+                gates[2].set()
+                await visible("Responding")
+                assert captured["ui"].mascot.state == "speaking"
+                assert len(tui._activity_lines(captured["ui"])) == 2
+                gates[3].set()
+                await visible("Please verify the changes.")
+                assert captured["ui"].mascot.state == "unverified"
+                await visible("enter send")  # Final text can paint before the worker returns.
+                pipe.send_text("/mascot still\r")
+                await visible("Makor is visible · still")
+                assert not captured["ui"].mascot.animation
+                pipe.send_text("/mascot off\r")
+                await visible("Makor is hidden")
+                assert not any("Makor ·" in row for row in rows())
+                pipe.send_text("/mascot on\r")
+                for _ in range(200):
+                    if captured["ui"].mascot.enabled:
+                        break
+                    await asyncio.sleep(.01)
+                assert captured["ui"].mascot.enabled
+                await visible("enter send")
+                pipe.send_text("fail\r")
+                await visible("Turn failed: demo failure")
+                assert captured["ui"].mascot.state == "error"
+                pipe.send_text("interrupt\r")
+                await visible("Makor is thinking")
+                for _ in range(200):
+                    if captured.get("interrupt_started"):
+                        break
+                    await asyncio.sleep(.01)
+                assert captured.get("interrupt_started")
+                pipe.send_text("\x03")
+                await visible("Turn cancelled.")
+                assert captured["ui"].mascot.state == "cancelled"
+                assert not tui._activity_lines(captured["ui"])
+            finally:
+                for event in gates:
+                    event.set()
+                pipe.send_text("\x1b")  # Release an approval if an earlier assertion failed.
+                await asyncio.sleep(.6)
+                pipe.send_text("\x03")
+                await asyncio.sleep(.1)
+                pipe.send_text("\x04")
+                assert await asyncio.wait_for(task, 3) == 0
 
     asyncio.run(exercise())

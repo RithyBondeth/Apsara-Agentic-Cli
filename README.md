@@ -1,5 +1,7 @@
 # Apsara Agentic
 
+The product is **Apsara Agentic** and its coding-agent persona is **Makor**, represented by the pixel Makara mascot.
+
 A local, bring-your-own-key coding agent for your terminal. Apsara reads and
 edits code in a workspace you choose, runs allowlisted commands, and connects to
 external tools over MCP — using your own API key, with no Apsara server in the
@@ -16,9 +18,18 @@ middle.
 
 ## Install
 
+The next alpha candidate is `0.1.0a2`, prepared from source and not yet
+published. Build it from this checkout and install the resulting wheel:
+
 ```bash
-pipx install https://github.com/RithyBondeth/Apsara-Agentic-Cli/releases/download/v0.1.0a1/apsara_agentic-0.1.0a1-py3-none-any.whl
+python3 -m pip install build
+python3 -m build
+pipx install ./dist/apsara_agentic-0.1.0a2-py3-none-any.whl
 ```
+
+The older [published alpha](https://github.com/RithyBondeth/Apsara-Agentic-Cli/releases/tag/v0.1.0a1)
+uses an outdated default model and lacks the current UI and runtime fixes.
+Use the candidate above for testing these changes.
 
 Python code intelligence works out of the box. For parser-accurate symbols and
 syntax diagnostics in JavaScript, TypeScript, Go, Rust, Java, Ruby, PHP, C#,
@@ -71,13 +82,41 @@ Interactive flags work directly too, for example `apsara --read-only` or
 `apsara --model ollama/llama3.2`.
 The default terminal layout follows OpenCode's structure: a centered welcome,
 filled transcript cards, an anchored composer with the model inside, and a
-details sidebar on wide terminals. Apsara keeps its gradient logo, blue and
-violet accents, colorful Markdown, and green/red diffs. `Ctrl+B` toggles the
+details sidebar on wide terminals. A small Makor head appears beside the current
+activity in the response area. The UI keeps its blue and violet
+accents, colorful Markdown, and green/red diffs. `Ctrl+B` toggles the
 sidebar; `PageUp`/`PageDown` and the mouse wheel scroll the conversation.
 Use `apsara --classic` for normal terminal scrollback, or `--tui` to explicitly
 select the full-screen interface. Piped output uses scrolling chat by default.
 Use `apsara --color` to force colors even when your shell exports `NO_COLOR`;
 `apsara --no-color` disables them in both interfaces.
+
+### Makor mascot
+
+Makor's compact pixel head replaces the loading spinner beside thinking and tool
+activity text. Its curled trunk, crest, blue eye, and tusks are simplified from
+the approved artwork. Its eye and crest pulse in a repeating loading rhythm
+while thinking, and it looks
+toward the action text while using tools. Approvals and retries show a waiting
+head; the head moves its mouth while the answer arrives, then disappears when
+the turn finishes or is interrupted. It occupies five columns and two terminal
+rows beside the text, including on narrow terminals and in classic scrolling chat.
+
+Piped output adds no artwork. Monochrome and ASCII fallbacks are supported.
+
+Use `/mascot off` or `/mascot on` to hide or show Makor, and `/mascot still` or
+`/mascot animate` to control motion for the current session. For saved preferences,
+add these settings to the `[ui]` section of `.apsara/config.toml`:
+
+```toml
+[ui]
+mascot = true
+mascot_animation = false
+```
+
+Animation is disabled in CI and on `TERM=dumb` terminals. The original PNG is
+retained with the package. The compact head and its interaction frames live in
+`src/apsara_cli/shared/mascot.py`, with no image library needed at runtime.
 
 ## Tools
 
@@ -257,6 +296,19 @@ throughout the turn, including tools and active skills. Existing approvals
 remain in force. See [skills and context management](https://github.com/RithyBondeth/Apsara-Agentic-Cli/blob/main/docs/SKILLS_AND_CONTEXT.md)
 for format, limits, storage, and compaction behavior.
 
+Use `/budget` to inspect the current turn's model steps, tool calls, reported
+tokens, estimated reservations, and reused results. The sidebar updates these
+while work runs. Defaults are 25 steps, 50 tool calls, and 100,000 turn tokens;
+set `APSARA_MAX_STEPS`, `APSARA_MAX_TOOL_CALLS`, or `APSARA_MAX_TURN_TOKENS` in
+your shell to change them. Budget stops preserve edits for review. Local token
+estimates cannot guarantee a provider billing cap. Passing checks and unchanged
+covered file reads are reused while their evidence is current; later changes
+still invalidate verification and review. Earlier exchanges are trimmed sooner
+as the turn allowance shrinks, while required instructions and the latest
+request remain protected. Phase allowances protect verification and finishing;
+review recovery has at most two provider attempts for unchanged source and policy.
+See the phase and successful-work comparison details in the skills/context guide.
+
 ## Lifecycle hooks
 
 Trusted hooks can enforce repository policy at `session_start`, `before_tool`,
@@ -399,7 +451,8 @@ The budget is derived from the selected model's context window, so a
 200k-window model gets a far larger working set than a 32k one. `/status` shows
 the current usage against both. `APSARA_INPUT_TOKEN_BUDGET` may lower the
 working budget, but it cannot exceed the selected model's safety allowance or
-the global 128k input ceiling. Cap per-turn tool calls with `APSARA_MAX_STEPS`.
+the global 128k input ceiling. Cap model steps with `APSARA_MAX_STEPS`, tool
+calls with `APSARA_MAX_TOOL_CALLS`, and turn tokens with `APSARA_MAX_TURN_TOKENS`.
 
 Token counts are provider-reported and aggregated across every model call in an
 agent turn, including automatic conversation summaries. If a streaming provider

@@ -27,6 +27,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
+
 from prompt_toolkit.application import Application
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from prompt_toolkit.buffer import Buffer
@@ -204,6 +205,21 @@ class TuiConsoleUI(ConsoleUI):
             except Exception:
                 pass
 
+    def _mascot_changed(self) -> None:
+        self._invalidate()
+
+    async def _mascot_loop(self) -> None:
+        """Paint on the main application loop, even while the worker waits."""
+        while True:
+            await asyncio.sleep(.25)
+            if self.mascot.enabled and self.mascot.animation:
+                self._invalidate()
+
+    def terminal_rows(self) -> int:
+        if self.app is not None:
+            return max(1, self.app.output.get_size().rows)
+        return 24
+
     # ── Output primitives ─────────────────────────────────────────────────
 
     def print_line(self, text: str = "") -> None:
@@ -315,8 +331,15 @@ class TuiConsoleUI(ConsoleUI):
         self.spinner_message = message
         self._spinner_start_time = time.monotonic()
         self.spinner_stop_event.clear()
-        if self._spinner_task is None or self._spinner_task.done():
-            self._spinner_task = asyncio.get_event_loop().create_task(self._spinner_loop())
+        # Agent events arrive on a worker loop that closes after each turn.
+        # Keep animation tasks on the application's loop so exit cancels them.
+        def start_tick() -> None:
+            if (not self.spinner_stop_event.is_set()
+                    and (self._spinner_task is None or self._spinner_task.done())):
+                self._spinner_task = self.app.create_background_task(self._spinner_loop())
+
+        if self.app.loop is not None:
+            self.app.loop.call_soon_threadsafe(start_tick)
 
     async def _spinner_loop(self) -> None:
         frames = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
@@ -507,6 +530,26 @@ def _sidebar_text(
         lines(f"   {ui.style(ui.rate_limit_label(), _DIMTXT)}")
     lines("")
 
+    budget = ui._run_budget
+    if budget:
+        lines(_section(ui, "◷", "Turn budget", _C_CONTEXT))
+        lines(f"   {budget['steps_used']}/{budget['step_limit']} steps · "
+              f"{budget['tool_calls_used']}/{budget['tool_call_limit']} tools")
+        spent = budget['reported_usage'] + budget['estimated_usage']
+        lines(f"   {spent:,}/{budget['usage_limit']:,} tokens")
+        if not budget['usage_complete']:
+            lines(f"   {ui.style('Includes reserved estimates', '38;2;247;200;100')}")
+        lines(f"   {budget['reused_checks']} results reused")
+        if budget.get("phase"):
+            phase = budget["phase"]
+            spent = budget.get("phase_spent", {}).get(phase, 0)
+            limit = budget.get("phase_current_limit", budget.get("phase_limits", {}).get(phase, budget["usage_limit"]))
+            if phase == "finish":
+                lines(f"   Finish · {spent:,} used · {budget.get('phase_available', 0):,} available")
+            else:
+                lines(f"   {phase.title()} · {spent:,}/{limit:,} tokens")
+        lines("")
+
     # Model: name, provider · tier, context window, key status.
     key_ok = True
     if entry:
@@ -607,10 +650,20 @@ def _sidebar_text(
 
 def _chat_text(ui: TuiConsoleUI) -> ANSI:
     body_lines = ui.rendered_lines()
-    if ui._spinner_frame:
+    activity = _activity_lines(ui)
+    if activity:
         body_lines.append("")
-        body_lines.append(f"  {ui.compose_spinner_line(ui._spinner_tick)}")
+        body_lines.extend(activity)
     return ANSI("\n".join(body_lines))
+
+
+def _activity_lines(ui: TuiConsoleUI) -> list[str]:
+    if ui.mascot.enabled:
+        if ui.mascot.state not in {"thinking", "working", "verifying", "speaking", "waiting", "retrying"}:
+            return []
+    elif not ui._spinner_frame:
+        return []
+    return ui.compose_activity_lines(ui._spinner_tick)
 
 
 def _status_left(ui: TuiConsoleUI, options: Any) -> ANSI:
@@ -798,6 +851,7 @@ async def tui_loop(args: object, config: object) -> int:
         config_theme.apply_to(theme)
 
     ui = TuiConsoleUI(use_color=options.use_color, auto_approve=options.auto_approve, theme=theme)
+    ui.mascot.configure(config.ui)
 
     history: list[dict[str, Any]] = []
     if not options.stateless:
@@ -862,7 +916,8 @@ async def tui_loop(args: object, config: object) -> int:
         # The Window clamps its scroll to keep this 'cursor' visible on every
         # render — so pointing it at the last line implements follow-bottom,
         # pointing it at the current scroll row freezes manual browsing, and
-        total = len(ui.rendered_lines()) + (2 if ui._spinner_frame else 0)
+        activity = _activity_lines(ui)
+        total = len(ui.rendered_lines()) + (1 + len(activity) if activity else 0)
         if follow["on"]:
             return Point(x=0, y=max(total - 1, 0))
         return Point(x=0, y=max(chat_window.vertical_scroll, 0))
@@ -1193,9 +1248,11 @@ async def tui_loop(args: object, config: object) -> int:
         if state["welcome"] or picker["active"] or not follow["on"]:
             return
         max_scroll = _chat_max_scroll()
+        # The temporary activity can disappear and clamp the scroll position.
+        # Record that new bottom even if the Window already moved there.
+        follow["last_set"] = max_scroll
         if chat_window.vertical_scroll != max_scroll:
             chat_window.vertical_scroll = max_scroll
-            follow["last_set"] = max_scroll
             app_.invalidate()
 
     style = Style.from_dict({
@@ -1391,6 +1448,8 @@ async def tui_loop(args: object, config: object) -> int:
 
     async def _prompt_for_key(env_var: str) -> Optional[str]:
         """Masked key entry in the chat pane; returns the key or None if skipped."""
+        previous_activity = ui.mascot.state
+        ui.set_mascot_state("waiting")
         ui.lines.append("")
         ui.lines.append(
             f"  {ui.style('?', '38;2;247;200;100')} Enter your "
@@ -1407,6 +1466,7 @@ async def tui_loop(args: object, config: object) -> int:
             keyprompt["mode"] = None
             keyprompt["future"] = None
             input_buffer.reset()
+            ui.set_mascot_state(previous_activity)
         return raw.strip() or None
 
     async def _prompt_yes_no(
@@ -1549,13 +1609,15 @@ async def tui_loop(args: object, config: object) -> int:
         })
         approval_window.vertical_scroll = 0
         ui.stop_spinner()
+        ui.set_mascot_state("waiting")
         ui._invalidate()
         done.wait()
 
         result = approval["result"]
         if result == "always" and allows_blanket:
             ui.approve_all = True
-        ui.start_spinner("Apsara is working")
+        ui.set_mascot_state("working")
+        ui.start_spinner("Makor is working")
         return result in {"approve", "always"}
 
     kb = KeyBindings()
@@ -1768,6 +1830,7 @@ async def tui_loop(args: object, config: object) -> int:
                 state["model"] = await _switch_model_tui(state["model"])
                 if _model_needs_key(state["model"]):
                     ui.warning("A provider key is required before this request can run.")
+                    ui.set_mascot_state("blocked")
                     return
 
             # execute_instruction drives begin_turn/finish_turn, which renders
@@ -1781,12 +1844,18 @@ async def tui_loop(args: object, config: object) -> int:
                 new_history, usage = await asyncio.to_thread(_run_agent_turn)
             except asyncio.CancelledError:
                 ui.stop_spinner()
+                ui.set_mascot_state("cancelled")
                 ui.warning("Turn cancelled. Your previous conversation and file checkpoints are preserved.")
                 return
             history[:] = new_history
             if usage and usage.get("total_tokens") is not None:
                 ui.usage(usage)
             save_if_needed(history, state["model"], options, ui)
+            ui.mascot.finish_turn(ui._turn_outcome, getattr(ui, "last_run_state", "completed"))
+        except Exception as exc:
+            ui.stop_spinner()
+            ui.set_mascot_state("error")
+            ui.error(f"Turn failed: {exc}")
         finally:
             state["busy"] = False
             ui._invalidate()
@@ -1813,6 +1882,10 @@ async def tui_loop(args: object, config: object) -> int:
             state["welcome"] = False
             event.app.layout.focus(chat_input_window)
         state["busy"] = True
+        follow["on"] = True
+        if not text.startswith("/"):
+            ui.mascot.begin_turn()
+            ui._invalidate()
         event.app.create_background_task(_handle_submission(text))
 
     app = Application(
@@ -1834,5 +1907,5 @@ async def tui_loop(args: object, config: object) -> int:
     if history:
         _restore_history(ui, history)
 
-    await app.run_async()
+    await app.run_async(pre_run=lambda: app.create_background_task(ui._mascot_loop()))
     return 0
