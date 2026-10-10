@@ -1,5 +1,7 @@
 # Apsara Agentic
 
+The product is **Apsara Agentic** and its coding-agent persona is **Makor**, represented by the pixel Makara mascot.
+
 A local, bring-your-own-key coding agent for your terminal. Apsara reads and
 edits code in a workspace you choose, runs allowlisted commands, and connects to
 external tools over MCP — using your own API key, with no Apsara server in the
@@ -80,13 +82,41 @@ Interactive flags work directly too, for example `apsara --read-only` or
 `apsara --model ollama/llama3.2`.
 The default terminal layout follows OpenCode's structure: a centered welcome,
 filled transcript cards, an anchored composer with the model inside, and a
-details sidebar on wide terminals. Apsara keeps its gradient logo, blue and
-violet accents, colorful Markdown, and green/red diffs. `Ctrl+B` toggles the
+details sidebar on wide terminals. A small Makor head appears beside the current
+activity in the response area. The UI keeps its blue and violet
+accents, colorful Markdown, and green/red diffs. `Ctrl+B` toggles the
 sidebar; `PageUp`/`PageDown` and the mouse wheel scroll the conversation.
 Use `apsara --classic` for normal terminal scrollback, or `--tui` to explicitly
 select the full-screen interface. Piped output uses scrolling chat by default.
 Use `apsara --color` to force colors even when your shell exports `NO_COLOR`;
 `apsara --no-color` disables them in both interfaces.
+
+### Makor mascot
+
+Makor's compact pixel head replaces the loading spinner beside thinking and tool
+activity text. Its curled trunk, crest, blue eye, and tusks are simplified from
+the approved artwork. Its eye and crest pulse in a repeating loading rhythm
+while thinking, and it looks
+toward the action text while using tools. Approvals and retries show a waiting
+head; the head moves its mouth while the answer arrives, then disappears when
+the turn finishes or is interrupted. It occupies five columns and two terminal
+rows beside the text, including on narrow terminals and in classic scrolling chat.
+
+Piped output adds no artwork. Monochrome and ASCII fallbacks are supported.
+
+Use `/mascot off` or `/mascot on` to hide or show Makor, and `/mascot still` or
+`/mascot animate` to control motion for the current session. For saved preferences,
+add these settings to the `[ui]` section of `.apsara/config.toml`:
+
+```toml
+[ui]
+mascot = true
+mascot_animation = false
+```
+
+Animation is disabled in CI and on `TERM=dumb` terminals. The original PNG is
+retained with the package. The compact head and its interaction frames live in
+`src/apsara_cli/shared/mascot.py`, with no image library needed at runtime.
 
 ## Tools
 

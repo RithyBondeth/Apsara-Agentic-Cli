@@ -62,6 +62,7 @@ include = ["apsara_cli*"]
 
 [tool.setuptools.package-data]
 "apsara_cli.engine" = ["bundled_skills/*/SKILL.md"]
+"apsara_cli.shared" = ["assets/makor.json", "assets/makor.png"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

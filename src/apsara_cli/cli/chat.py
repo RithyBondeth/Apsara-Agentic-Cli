@@ -430,6 +430,7 @@ _HELP_SECTIONS: list[tuple[str, list[tuple[str, str, str]]]] = [
         ("/history", "", "Show recent conversation turns"),
         ("/details", "", "Reveal the agent's internal steps from the last turn"),
         ("/clear", "", "Clear the in-memory conversation history"),
+        ("/mascot", "[on|off|still|animate]", "Show Makor or control mascot motion"),
     ]),
     ("Models & keys", [
         ("/model", "", "Show the current model"),
@@ -518,6 +519,24 @@ def handle_chat_command(
 
     if command_text == "/help":
         print_chat_help(ui)
+        return True, current_model
+
+    if command_text == "/mascot" or command_text.startswith("/mascot "):
+        choice = command_text[len("/mascot"):].strip().lower()
+        if choice == "on":
+            ui.mascot.enabled = True
+        elif choice == "off":
+            ui.mascot.enabled = False
+        elif choice == "still":
+            ui.mascot.animation = False
+        elif choice == "animate":
+            ui.mascot.animation = not os.environ.get("CI") and os.environ.get("TERM") != "dumb"
+        elif choice:
+            ui.error("Usage: /mascot [on|off|still|animate]")
+            return True, current_model
+        ui.info(f"Makor is {'visible' if ui.mascot.enabled else 'hidden'} · "
+                f"{'animated' if ui.mascot.animation else 'still'}.")
+        ui._mascot_changed()
         return True, current_model
 
     if command_text == "/details":
@@ -1216,6 +1235,7 @@ async def execute_instruction(
         if not selectable:
             ui.error(reason)
             ui.last_run_state = "failed"
+            ui.set_mascot_state("error")
             return list(history), None
 
     next_history = list(history)
@@ -1283,6 +1303,7 @@ async def execute_instruction(
                     print_event(event, ui)
                     update_history_from_event(next_history, event)
         except asyncio.CancelledError:
+            ui.set_mascot_state("cancelled")
             # Completed calls may already have provider totals; retain them,
             # then record the in-flight request separately as an estimate.
             if aggregate_usage:
@@ -1357,6 +1378,7 @@ async def run_once(args: object, config: object) -> int:
         config_theme.apply_to(theme)
 
     ui = ConsoleUI(use_color=options.use_color, auto_approve=options.auto_approve, theme=theme)
+    ui.mascot.configure(config.ui)
     history: list[dict[str, Any]] = []
 
     if not options.stateless:
@@ -1397,6 +1419,7 @@ async def chat_loop(args: object, config: object) -> int:
         config_theme.apply_to(theme)
 
     ui = ConsoleUI(use_color=options.use_color, auto_approve=options.auto_approve, theme=theme)
+    ui.mascot.configure(config.ui)
     history: list[dict[str, Any]] = []
     current_model = options.model
     turn_count = 0
