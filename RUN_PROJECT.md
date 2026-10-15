@@ -31,10 +31,10 @@ python -m pip install -e ".[dev]"
 This installs the runtime dependencies and the `apsara` command, pointed at your
 working copy — edits take effect without reinstalling.
 
-If you don't want the console script, the module form works too:
+If you don't want the console script, invoke the CLI entry point directly:
 
 ```bash
-python -m apsara_cli.cli.parser --help
+python -c "from apsara_cli.cli import main; raise SystemExit(main())" --help
 ```
 
 ## 4. Start Apsara
