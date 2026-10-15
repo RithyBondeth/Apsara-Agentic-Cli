@@ -133,11 +133,11 @@ Apsara-Agentic-Cli/
 
 ## Documentation
 
-- [Agent runtime](docs/AGENT_RUNTIME.md)
-- [Skills and context management](docs/SKILLS_AND_CONTEXT.md)
-- [Code intelligence](docs/CODE_INTELLIGENCE.md)
-- [Evaluation strategy](docs/EVALUATION_STRATEGY.md)
-- [Tester quickstart](TESTER_QUICKSTART.md) · [Running the project](RUN_PROJECT.md) · [Releasing](RELEASING.md)
+- [Agent runtime](https://github.com/RithyBondeth/Apsara-Agentic-Cli/blob/main/docs/AGENT_RUNTIME.md)
+- [Skills and context management](https://github.com/RithyBondeth/Apsara-Agentic-Cli/blob/main/docs/SKILLS_AND_CONTEXT.md)
+- [Code intelligence](https://github.com/RithyBondeth/Apsara-Agentic-Cli/blob/main/docs/CODE_INTELLIGENCE.md)
+- [Evaluation strategy](https://github.com/RithyBondeth/Apsara-Agentic-Cli/blob/main/docs/EVALUATION_STRATEGY.md)
+- [Tester quickstart](https://github.com/RithyBondeth/Apsara-Agentic-Cli/blob/main/TESTER_QUICKSTART.md) · [Running the project](https://github.com/RithyBondeth/Apsara-Agentic-Cli/blob/main/RUN_PROJECT.md) · [Releasing](https://github.com/RithyBondeth/Apsara-Agentic-Cli/blob/main/RELEASING.md)
 
 ## Development
 
@@ -160,4 +160,4 @@ python -m pytest
 
 ## License
 
-Distributed under the MIT License. See [`LICENSE`](LICENSE) for details.
+Distributed under the MIT License. See [`LICENSE`](https://github.com/RithyBondeth/Apsara-Agentic-Cli/blob/main/LICENSE) for details.
