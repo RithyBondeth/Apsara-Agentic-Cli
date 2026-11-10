@@ -11,12 +11,31 @@ def render_run_report(run: dict[str, Any]) -> str:
     for step in run.get("steps", []):
         mark = "x" if step.get("status") == "completed" else " "
         lines.append(f"- [{mark}] {step.get('title', '')} — {step.get('status', 'pending')}")
+    budget = run.get("budget") or {}
+    if budget:
+        lines.extend(["", "## Turn budget", "",
+                      f"- Model steps: {budget.get('steps_used', 0)}/{budget.get('step_limit', 0)}",
+                      f"- Tool calls: {budget.get('tool_calls_used', 0)}/{budget.get('tool_call_limit', 0)}",
+                      f"- Provider-reported tokens: {budget.get('reported_usage', 0)}",
+                      f"- Reserved estimated usage: {budget.get('estimated_usage', 0)}",
+                      f"- Token limit: {budget.get('usage_limit', 0)}",
+                      f"- Complete provider usage: {budget.get('usage_complete', False)}",
+                      f"- Reused results: {budget.get('reused_checks', 0)}"])
     if run.get("changed_files"):
         lines.extend(["", "## Changed files", "", *[f"- `{p}`" for p in run["changed_files"]]])
     if run.get("verification"):
         lines.extend(["", "## Verification", "", *[f"- `{v}`" for v in run["verification"]]])
     if run.get("error"):
         lines.extend(["", "## Error", "", str(run["error"])])
+    lines.extend(["", "## Completion evidence", "",
+                  f"- Verification: {run.get('verification_status', 'unknown')}",
+                  f"- Critic: {run.get('critic_status', 'unknown')}",
+                  f"- Outcome: {run.get('completion_reason') or 'No completion reason recorded.'}"])
+    for evidence in run.get("verification_evidence", []):
+        for result in evidence.get("results", []):
+            lines.append(f"- `{result.get('command', [])}` — {result.get('status')}, exit {result.get('returncode')}")
+    for finding in run.get("critic_findings", []):
+        lines.append(f"- Finding: {finding.get('path', '')} — {finding.get('description', '')}")
     return "\n".join(lines) + "\n"
 
 

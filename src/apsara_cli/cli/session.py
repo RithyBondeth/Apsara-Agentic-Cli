@@ -3,6 +3,7 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 
 SESSION_ROOT_DIR = ".apsara-cli"
@@ -24,6 +25,26 @@ def get_sessions_dir(workspace_root: Path) -> Path:
 
 def get_session_path(workspace_root: Path, session_name: str) -> Path:
     return get_sessions_dir(workspace_root) / f"{sanitize_session_name(session_name)}.json"
+
+
+def new_session_name(now: datetime | None = None) -> str:
+    """Return a readable, collision-resistant name for a fresh conversation."""
+    started = now or datetime.now().astimezone()
+    return f"session-{started.strftime('%Y%m%d-%H%M%S')}-{uuid4().hex[:4]}"
+
+
+def latest_session_name(workspace_root: Path) -> str | None:
+    """Return the most recently updated saved session, if one exists."""
+    candidates: list[tuple[int, str]] = []
+    for path in list_sessions(workspace_root):
+        try:
+            modified = path.stat().st_mtime_ns
+        except OSError:
+            continue
+        candidates.append((modified, path.stem))
+    if not candidates:
+        return None
+    return max(candidates, key=lambda item: (item[0], item[1]))[1]
 
 
 def load_session_messages(workspace_root: Path, session_name: str) -> list[dict[str, Any]]:

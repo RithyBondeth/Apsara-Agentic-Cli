@@ -1,4 +1,5 @@
 import difflib
+import json
 import importlib.util
 import glob as _glob
 import os
@@ -17,7 +18,7 @@ from apsara_cli.shared.types import ToolRisk
 
 
 class ToolSecurityError(Exception):
-    """Raised when a tool request breaks sandbox rules."""
+    """Raised when a tool request violates the configured tool policy."""
 
 
 ConfirmationCallback = Callable[[str, Dict[str, Any]], bool]
@@ -49,6 +50,12 @@ _dry_run_override: ContextVar[Optional[bool]] = ContextVar(
 )
 _read_only_override: ContextVar[Optional[bool]] = ContextVar(
     "read_only_override", default=None
+)
+_model_override: ContextVar[Optional[str]] = ContextVar(
+    "model_override", default=None
+)
+_auxiliary_usage_override: ContextVar[Optional[list[dict[str, Any]]]] = ContextVar(
+    "auxiliary_usage_override", default=None
 )
 _trust_callback_override: ContextVar[Optional[TrustCallback]] = ContextVar(
     "trust_callback_override", default=None
@@ -92,6 +99,7 @@ def agent_runtime_context(
     read_only: Optional[bool] = None,
     trust_callback: Optional[TrustCallback] = None,
     bash_timeout_seconds: Optional[int] = None,
+    model: Optional[str] = None,
 ) -> Iterator[None]:
     workspace_token = None
     bash_token = None
@@ -102,6 +110,8 @@ def agent_runtime_context(
     read_only_token = None
     trust_token = None
     bash_timeout_token = None
+    model_token = None
+    auxiliary_usage_token = _auxiliary_usage_override.set([])
 
     try:
         if workspace_root is not None:
@@ -124,8 +134,13 @@ def agent_runtime_context(
             trust_token = _trust_callback_override.set(trust_callback)
         if bash_timeout_seconds is not None:
             bash_timeout_token = _bash_timeout_override.set(bash_timeout_seconds)
+        if model is not None:
+            model_token = _model_override.set(model)
         yield
     finally:
+        _auxiliary_usage_override.reset(auxiliary_usage_token)
+        if model_token is not None:
+            _model_override.reset(model_token)
         if bash_timeout_token is not None:
             _bash_timeout_override.reset(bash_timeout_token)
         if trust_token is not None:
@@ -181,6 +196,23 @@ def _read_only() -> bool:
     return False
 
 
+def _current_model() -> str:
+    from apsara_cli.engine.models import DEFAULT_MODEL
+    return _model_override.get() or DEFAULT_MODEL
+
+
+def consume_auxiliary_usage() -> list[dict[str, Any]]:
+    usage = list(_auxiliary_usage_override.get() or [])
+    _auxiliary_usage_override.set([])
+    return usage
+
+
+def _record_auxiliary_usage(data: dict[str, Any]) -> None:
+    pending = list(_auxiliary_usage_override.get() or [])
+    pending.append(data)
+    _auxiliary_usage_override.set(pending)
+
+
 def classify_tool_risk(tool_name: str) -> ToolRisk:
     """Stable permission category used by journals, policies, and future UIs."""
     if tool_name.startswith("mcp__"):
@@ -189,7 +221,7 @@ def classify_tool_risk(tool_name: str) -> ToolRisk:
         return ToolRisk.DESTRUCTIVE
     if tool_name in {"write_to_file", "edit_file", "replace_file_lines", "replace_symbol", "move_file", "create_directory", "undo_last_checkpoint", "undo_turn_checkpoint", "remember_project_note"}:
         return ToolRisk.WRITE
-    if tool_name in {"run_bash_command", "start_process", "stop_process"}:
+    if tool_name in {"run_bash_command", "start_process", "stop_process", "verify_project"}:
         return ToolRisk.EXECUTE
     return ToolRisk.READ
 
@@ -301,7 +333,7 @@ def _load_local_plugins() -> list[dict[str, Any]]:
         ):
             print(
                 f"Skipped untrusted local plugin {py_file.name}. "
-                "Run `apsara chat` in this project to review and approve it."
+                "Run `apsara` in this project to review and approve it."
             )
             continue
 
@@ -555,13 +587,23 @@ def create_directory(path: str) -> str:
         resolved_path = _resolve_path(path)
         if resolved_path.exists() and resolved_path.is_dir():
             return f"Directory already exists: {_display_path(resolved_path)}"
-        
-        if _dry_run():
-            return f"[Dry Run] Successfully created directory: {_display_path(resolved_path)} (simulated)"
 
-        _checkpoint([resolved_path], f"Before creating directory {_display_path(resolved_path)}")
+        display = _display_path(resolved_path)
+        if not _confirm_action(
+            "create_directory",
+            {
+                "path": str(resolved_path),
+                "display_path": display,
+            },
+        ):
+            return f"Error creating directory: creation of '{display}' was not approved."
+
+        if _dry_run():
+            return f"[Dry Run] Successfully created directory: {display} (simulated)"
+
+        _checkpoint([resolved_path], f"Before creating directory {display}")
         resolved_path.mkdir(parents=True, exist_ok=True)
-        return f"Created directory: {_display_path(resolved_path)}"
+        return f"Created directory: {display}"
     except Exception as exc:
         return _format_exception("Error creating directory", exc)
 
@@ -722,7 +764,28 @@ def _extract_command_names(command: str) -> list[str]:
     silently allow ``python -m pip`` when ``pip`` itself is not approved.
     """
     import re
-    segments = re.split(r"\|\|?|&&?|;", command)
+    # Operators inside quoted arguments are data, not command boundaries.
+    segments = []
+    quote = None
+    escaped = False
+    start = 0
+    for index, character in enumerate(command):
+        if escaped:
+            escaped = False
+            continue
+        if character == "\\" and quote != "'":
+            escaped = True
+            continue
+        if quote:
+            if character == quote:
+                quote = None
+            continue
+        if character in {"'", '"'}:
+            quote = character
+        elif character in {"|", "&", ";"}:
+            segments.append(command[start:index])
+            start = index + 1
+    segments.append(command[start:])
     names: list[str] = []
     for seg in segments:
         seg = seg.strip()
@@ -863,14 +926,8 @@ def run_bash_command(command: str) -> str:
         from apsara_cli.engine.turn_checkpoints import capture_turn_workspace
         capture_turn_workspace(_workspace_root())
         timeout_seconds = _bash_timeout()
-        result = subprocess.run(
-            command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds,
-            cwd=str(_workspace_root()),
-        )
+        from apsara_cli.engine.cancellation import run_command
+        result = run_command(command, shell=True, timeout=timeout_seconds, cwd=str(_workspace_root()))
         output = (
             f"STDOUT:\n{result.stdout}\n"
             f"STDERR:\n{result.stderr}\n"
@@ -962,7 +1019,9 @@ def search_files(pattern: str, root_dir: str = ".") -> str:
             )
         except FileNotFoundError:
             result = subprocess.run(
-                ["grep", "-rnI", "--", pattern, str(resolved_root)],
+                ["grep", "-rnIE", *[f"--exclude-dir={directory}" for directory in (
+                    ".git", ".apsara", "node_modules", ".venv", "__pycache__", ".pytest_cache",
+                )], "--", pattern, str(resolved_root)],
                 capture_output=True,
                 text=True,
                 timeout=30,
@@ -1293,6 +1352,9 @@ def undo_last_checkpoint(checkpoint_id: str = "") -> str:
     """Restore a checkpoint, defaulting to the most recent snapshot."""
     if _read_only():
         return "Error: Undo is disabled in read-only mode."
+    requested = checkpoint_id or "latest"
+    if not _confirm_action("undo_checkpoint", {"checkpoint_id": requested}):
+        return f"Error: restore of checkpoint '{requested}' was not approved."
     from apsara_cli.engine.checkpoints import restore_checkpoint
 
     try:
@@ -1316,14 +1378,17 @@ def list_turn_checkpoints_tool() -> str:
     return "\n".join(format_turn_checkpoint(item) for item in turns[:20])
 
 
-def undo_turn_checkpoint(turn_id: str = "") -> str:
+def undo_turn_checkpoint(turn_id: str = "", force: bool = False) -> str:
     """Restore every built-in file mutation from one agent turn."""
     if _read_only():
         return "Error: Turn rollback is disabled in read-only mode."
+    requested = turn_id or "latest"
+    if not _confirm_action("undo_turn", {"turn_id": requested, "force": force}):
+        return f"Error: rollback of turn '{requested}' was not approved."
     from apsara_cli.engine.turn_checkpoints import restore_turn_checkpoint
 
     try:
-        result = restore_turn_checkpoint(_workspace_root(), turn_id or None)
+        result = restore_turn_checkpoint(_workspace_root(), turn_id or None, force=force)
     except (FileNotFoundError, OSError, ValueError) as exc:
         return f"Error: {exc}"
     rollback = result.get("rollback") or {}
@@ -1391,6 +1456,32 @@ def find_references(name: str, path: str = "") -> str:
     return "\n".join(lines)
 
 
+def lsp_go_to_definition(path: str, line: int, column: int) -> str:
+    """Use an installed language server for type-aware definition lookup."""
+    try:
+        resolved = _resolve_path(path, must_exist=True)
+        from apsara_cli.engine.lsp import query_locations
+        lines = query_locations(
+            _workspace_root(), resolved, line=line, column=column, operation="definition"
+        )
+        return "\n".join(lines) if lines else "No LSP definition found."
+    except Exception as exc:
+        return _format_exception("Error querying language server", exc)
+
+
+def lsp_find_references(path: str, line: int, column: int) -> str:
+    """Use an installed language server for type-aware reference lookup."""
+    try:
+        resolved = _resolve_path(path, must_exist=True)
+        from apsara_cli.engine.lsp import query_locations
+        lines = query_locations(
+            _workspace_root(), resolved, line=line, column=column, operation="references"
+        )
+        return "\n".join(lines) if lines else "No LSP references found."
+    except Exception as exc:
+        return _format_exception("Error querying language server", exc)
+
+
 def code_diagnostics(path: str = "", project: bool = False) -> str:
     """Run syntax diagnostics for a file or an explicit native project check."""
     from apsara_cli.engine.intelligence import format_diagnostics, project_diagnostics, syntax_diagnostics
@@ -1404,6 +1495,58 @@ def code_diagnostics(path: str = "", project: bool = False) -> str:
     resolved_path = _resolve_path(path, must_exist=True)
     issues = syntax_diagnostics(resolved_path)
     return format_diagnostics(_workspace_root(), issues) or f"Syntax diagnostics clean for {_display_path(resolved_path)}."
+
+
+def verify_project(
+    phase: str = "full", isolated: bool = False, timeout: int = 0, fresh: bool = False
+) -> str:
+    """Run manifest-aware project checks and return structured evidence."""
+    from apsara_cli.engine.verification import (
+        detect_verification_commands,
+        format_verification_report,
+        run_verification,
+        verification_digest_source,
+    )
+
+    if _read_only():
+        return "Error: Project verification is disabled in read-only mode because it executes workspace code."
+    try:
+        commands = detect_verification_commands(
+            _workspace_root(), "targeted" if phase == "targeted" else "full"
+        )
+    except (OSError, ValueError) as exc:
+        return f"Error: Verification could not run: {exc}"
+    if not commands:
+        return format_verification_report(
+            run_verification(_workspace_root(), phase=phase, isolated=isolated, timeout=timeout or _bash_timeout())
+        )
+    digest = trust.digest_text(verification_digest_source(commands))
+    if not request_workspace_trust(
+        "verification:project",
+        digest,
+        {
+            "kind": "verification",
+            "display_path": ", ".join(" ".join(item.command) for item in commands),
+            "commands": [list(item.command) for item in commands],
+            "isolated": isolated,
+            "phase": phase,
+        },
+    ):
+        return "Error: Project verification was not approved."
+    if _dry_run():
+        return "Verification skipped in dry-run mode (commands were not executed)."
+    from apsara_cli.engine.turn_checkpoints import capture_turn_workspace
+    capture_turn_workspace(_workspace_root())
+    try:
+        report = run_verification(
+            _workspace_root(),
+            phase=phase,
+            isolated=isolated,
+            timeout=timeout or _bash_timeout(),
+        )
+    except (OSError, RuntimeError, ValueError) as exc:
+        return f"Error: Verification could not run: {exc}"
+    return format_verification_report(report)
 
 
 def replace_symbol(path: str, symbol: str, replacement: str) -> str:
@@ -1485,6 +1628,92 @@ def _tool_definition(
     return definition
 
 
+def get_request_tools() -> list[Dict[str, Any]]:
+    """Only core and explicitly discovered schemas enter the model request."""
+    from apsara_cli.engine.capabilities import CORE_TOOLS, current_capabilities
+    state = current_capabilities()
+    names = CORE_TOOLS | (state.tools if state is not None else set())
+    return [tool for tool in get_agent_tools() if tool["function"]["name"] in names]
+
+
+def discover_tools(query: str, limit: int = 5) -> str:
+    """Search descriptions and activate a bounded set for subsequent requests."""
+    from apsara_cli.engine.capabilities import CORE_TOOLS, MAX_ACTIVE_TOOLS, current_capabilities
+    if not query.strip() or not 1 <= limit <= 8:
+        return "Error: Supply a non-empty query and a limit between 1 and 8."
+    terms = query.lower().replace("_", " ").split()
+    ranked = []
+    for tool in get_agent_tools():
+        function = tool["function"]
+        name = function["name"]
+        description = function.get("description", "")
+        haystack = (name.replace("_", " ") + " " + description).lower()
+        score = sum(term in haystack for term in terms)
+        if name.lower() == query.strip().lower():
+            score += len(terms) + 10
+        if score:
+            ranked.append((score, name, description))
+    ranked.sort(key=lambda item: (-item[0], item[1]))
+    state = current_capabilities()
+    if state is None:
+        return "Error: Tool activation requires an active agent turn."
+    results = []
+    for _, name, description in ranked[:limit]:
+        if name not in CORE_TOOLS and name not in state.tools and len(state.tools) >= MAX_ACTIVE_TOOLS:
+            continue
+        if name not in CORE_TOOLS:
+            state.tools.add(name)
+        results.append({"name": name, "description": description[:240], "active": True})
+    return json.dumps({"tools": results, "message": "Matched tools are now available. Existing permissions still apply." if results else "No tools matched or the activation limit was reached."})
+
+
+def list_skills(query: str = "") -> str:
+    from apsara_cli.engine.skills import discover_skills
+    skills = discover_skills(_workspace_root())
+    terms = query.lower().split()
+    return json.dumps({"skills": [skill.metadata() for skill in skills
+                                 if all(term in (skill.name + " " + skill.description).lower() for term in terms)]})
+
+
+def read_skill(name: str) -> str:
+    from apsara_cli.engine.capabilities import MAX_ACTIVE_SKILL_CHARS, current_capabilities
+    from apsara_cli.engine.skills import discover_skills, read_skill_file
+    skill = next((item for item in discover_skills(_workspace_root()) if item.name == name), None)
+    if skill is None:
+        return f"Error: Skill '{name}' was not found. Use list_skills."
+    try:
+        content = read_skill_file(skill)
+    except (OSError, ValueError, UnicodeError) as exc:
+        return f"Error reading skill: {exc}"
+    state = current_capabilities()
+    if state is None:
+        return "Error: Loading a skill requires an active agent turn."
+    used = sum(len(text) for key, text in state.skills.items() if key != name)
+    if used + len(content) > MAX_ACTIVE_SKILL_CHARS:
+        return "Error: Active skill instructions exceed the per-turn limit. Use fewer or shorter skills."
+    state.skills[name] = content
+    return f"Loaded skill '{name}' ({skill.source}): {skill.description}. Full instructions are attached to subsequent requests for this turn."
+
+
+def read_skill_resource(name: str, path: str) -> str:
+    from apsara_cli.engine.skills import discover_skills, read_skill_file
+    skill = next((item for item in discover_skills(_workspace_root()) if item.name == name), None)
+    if skill is None:
+        return f"Error: Skill '{name}' was not found."
+    try:
+        return read_skill_file(skill, path)
+    except (OSError, ValueError, UnicodeError) as exc:
+        return f"Error reading skill resource: {exc}"
+
+
+def read_tool_result(identifier: str, start_line: int = 1, line_count: int = 80, char_offset: int | None = None) -> str:
+    from apsara_cli.engine.context import read_result
+    try:
+        return read_result(_workspace_root(), identifier, start_line, line_count, char_offset=char_offset)
+    except (OSError, ValueError, UnicodeError) as exc:
+        return f"Error reading tool result: {exc}"
+
+
 def get_agent_tools() -> list[Dict[str, Any]]:
     tools = [
         _tool_definition(
@@ -1543,7 +1772,7 @@ def get_agent_tools() -> list[Dict[str, Any]]:
         ),
         _tool_definition(
             "create_directory",
-            "Create a directory (and any missing parent directories) inside the workspace.",
+            "Create a directory (and any missing parent directories) inside the workspace after user approval.",
             {
                 "path": {
                     "type": "string",
@@ -1708,14 +1937,15 @@ def get_agent_tools() -> list[Dict[str, Any]]:
         ),
         _tool_definition(
             "undo_last_checkpoint",
-            "Restore an automatic file checkpoint. Omit checkpoint_id to undo the latest mutation.",
+            "Restore an automatic file checkpoint after user approval. Omit checkpoint_id to undo the latest mutation.",
             {"checkpoint_id": {"type": "string", "description": "Optional checkpoint id."}},
         ),
         _tool_definition("list_turn_checkpoints_tool", "List atomic checkpoints grouped by agent turn.", {}),
         _tool_definition(
             "undo_turn_checkpoint",
-            "Roll back every captured file mutation from an agent turn.",
-            {"turn_id": {"type": "string", "description": "Optional turn/run id; defaults to latest."}},
+            "Roll back every captured file mutation from an agent turn after user approval.",
+            {"turn_id": {"type": "string", "description": "Optional turn/run id; defaults to latest."},
+             "force": {"type": "boolean", "description": "Overwrite later user edits only when the user explicitly requests a forced restore."}},
         ),
         _tool_definition(
             "repository_map",
@@ -1747,12 +1977,73 @@ def get_agent_tools() -> list[Dict[str, Any]]:
             ["name"],
         ),
         _tool_definition(
+            "lsp_go_to_definition",
+            "Use an installed language server for type-aware definition lookup at a source position. "
+            "Fall back to go_to_definition when no server is installed.",
+            {
+                "path": {"type": "string", "description": "Source file path."},
+                "line": {"type": "integer", "description": "1-based line."},
+                "column": {"type": "integer", "description": "1-based column."},
+            },
+            ["path", "line", "column"],
+        ),
+        _tool_definition(
+            "lsp_find_references",
+            "Use an installed language server for type-aware references at a source position. "
+            "Fall back to find_references when no server is installed.",
+            {
+                "path": {"type": "string", "description": "Source file path."},
+                "line": {"type": "integer", "description": "1-based line."},
+                "column": {"type": "integer", "description": "1-based column."},
+            },
+            ["path", "line", "column"],
+        ),
+        _tool_definition(
             "code_diagnostics",
             "Check one source file for syntax errors, or run the project's native checker when project=true. Project checks may take time.",
             {
                 "path": {"type": "string", "description": "Source file for a fast syntax check."},
                 "project": {"type": "boolean", "description": "Run pyright, tsc, go test, or cargo check for the whole project."},
             },
+        ),
+        _tool_definition(
+            "verify_project",
+            "Run manifest-aware tests, type checks, lint, and build checks with structured results. "
+            "Use phase=baseline before editing, targeted while repairing, and full before finishing. "
+            "Set isolated=true to run in a disposable snapshot.",
+            {
+                "phase": {
+                    "type": "string",
+                    "enum": ["baseline", "targeted", "full"],
+                    "description": "Verification stage.",
+                },
+                "isolated": {
+                    "type": "boolean",
+                    "description": "Run checks in a disposable workspace snapshot.",
+                },
+                "timeout": {
+                    "type": "integer",
+                    "description": "Per-command timeout in seconds; zero uses the configured default.",
+                },
+                "fresh": {"type": "boolean", "description": "Execute again even if unchanged passing evidence exists; use for deliberate repeated or flaky checks."},
+            },
+        ),
+        _tool_definition(
+            "request_critic",
+            "Ask an independent read-only critic to review the current plan, diff, or tests. "
+            "Use before a risky implementation and after full verification for non-trivial changes.",
+            {
+                "objective": {
+                    "type": "string",
+                    "description": "The user objective the critic should validate.",
+                },
+                "focus": {
+                    "type": "string",
+                    "description": "Specific plan, implementation, or test concern to review.",
+                },
+                "fresh": {"type": "boolean", "description": "Request a new independent review even if this request was already approved."},
+            },
+            ["objective"],
         ),
         _tool_definition(
             "replace_symbol",
@@ -1772,6 +2063,20 @@ def get_agent_tools() -> list[Dict[str, Any]]:
             ["note"],
         ),
     ]
+
+    tools.extend([
+        _tool_definition("discover_tools", "Find and activate specialized built-in, plugin, or MCP tools by name, server, or task description. Search before using a tool absent from your current schemas.", {
+            "query": {"type": "string"}, "limit": {"type": "integer", "minimum": 1, "maximum": 8},
+        }, ["query"]),
+        _tool_definition("list_skills", "List short metadata for bundled, user, and project skills. Full instructions are loaded only when needed.", {"query": {"type": "string"}}),
+        _tool_definition("read_skill", "Load a named skill's instructions for this turn. Skills do not grant permission to execute commands or external actions.", {"name": {"type": "string"}}, ["name"]),
+        _tool_definition("read_skill_resource", "Read a referenced file relative to a named skill directory. Scripts are read as text, never executed by this tool.", {"name": {"type": "string"}, "path": {"type": "string"}}, ["name", "path"]),
+        _tool_definition("read_tool_result", "Retrieve a bounded line range from a full tool result saved locally when output was shortened.", {
+            "identifier": {"type": "string"}, "start_line": {"type": "integer", "minimum": 1},
+            "line_count": {"type": "integer", "minimum": 1, "maximum": 200},
+            "char_offset": {"type": "integer", "minimum": 0, "description": "Use character pagination for a long single-line result; overrides line selection."},
+        }, ["identifier"]),
+    ])
 
     # Load local workspace plugins
     local_plugins = _load_local_plugins()
@@ -1808,6 +2113,11 @@ def get_agent_tools() -> list[Dict[str, Any]]:
 
 def get_tool_registry() -> Dict[str, Callable[..., str]]:
     registry: Dict[str, Callable[..., str]] = {
+        "discover_tools": discover_tools,
+        "list_skills": list_skills,
+        "read_skill": read_skill,
+        "read_skill_resource": read_skill_resource,
+        "read_tool_result": read_tool_result,
         "read_file": read_file,
         "read_file_lines": read_file_lines,
         "parallel_read_files": parallel_read_files,
@@ -1834,7 +2144,10 @@ def get_tool_registry() -> Dict[str, Callable[..., str]]:
         "find_symbol": find_symbol,
         "go_to_definition": go_to_definition,
         "find_references": find_references,
+        "lsp_go_to_definition": lsp_go_to_definition,
+        "lsp_find_references": lsp_find_references,
         "code_diagnostics": code_diagnostics,
+        "verify_project": verify_project,
         "replace_symbol": replace_symbol,
         "read_project_memory": read_project_memory,
         "remember_project_note": remember_project_note,
@@ -1862,6 +2175,31 @@ async def execute_tool_async(tool_name: str, arguments: Dict[str, Any]) -> str:
 
     Built-in tools stay synchronous; only remote calls need to await.
     """
+    if tool_name == "request_critic":
+        from apsara_cli.engine.critic import request_critique, CRITIC_MAX_COMPLETION_TOKENS
+        content, usage = await request_critique(
+            _workspace_root(),
+            objective=str(arguments.get("objective") or "Review the current change"),
+            focus=str(arguments.get("focus") or ""),
+            model=_current_model(),
+            changed_files=[str(item) for item in arguments.get("_changed_files", [])],
+            verification=arguments.get("_verification"),
+            review_key=arguments.get("_review_key"),
+        )
+        usage = dict(usage or {})
+        if usage.pop("request_skipped", False):
+            return content
+        usage_reported = bool(usage.get("total_tokens") or usage.get("prompt_tokens")
+                              or usage.get("completion_tokens") or usage.get("input_tokens")
+                              or usage.get("output_tokens"))
+        usage["apsara_model"] = _current_model()
+        usage.setdefault("auxiliary_calls", 1)
+        usage.setdefault("provider_reported_calls", 1 if usage_reported else 0)
+        usage.setdefault("unreported_calls", 0 if usage_reported else 1)
+        usage.setdefault("completion_reserve", CRITIC_MAX_COMPLETION_TOKENS)
+        _record_auxiliary_usage(usage)
+        return content
+
     manager = _mcp_manager_override.get()
     if manager is not None and manager.has_tool(tool_name):
         remote_name = tool_name.rsplit("__", 1)[-1].lower()
@@ -1879,6 +2217,9 @@ async def execute_tool_async(tool_name: str, arguments: Dict[str, Any]) -> str:
         ):
             return f"Error: MCP tool '{tool_name}' was not approved."
         return await manager.call(tool_name, arguments)
+    if tool_name in {"verify_project", "run_bash_command"}:
+        from apsara_cli.engine.cancellation import run_interruptible
+        return await run_interruptible(execute_tool, tool_name, arguments)
     return execute_tool(tool_name, arguments)
 
 

@@ -32,10 +32,10 @@ def _scripted_llm(scripts):
     return _fake, state
 
 
-def _run(conversation):
+def _run(conversation, model=executor.DEFAULT_MODEL):
     """Drive run_agent_stream to completion, returning parsed event dicts."""
     async def _collect():
-        return [json.loads(chunk) async for chunk in executor.run_agent_stream(conversation)]
+        return [json.loads(chunk) async for chunk in executor.run_agent_stream(conversation, model=model)]
 
     return asyncio.run(_collect())
 
@@ -57,6 +57,13 @@ def _final_event(content="All done.", usage=None):
     return {"type": "stream_done", "content": content, "tool_calls": None, "usage": usage or {}}
 
 
+def _verification(arguments):
+    phase = arguments.get("phase", "full")
+    return "Verification passed.\n" + json.dumps({"phase": phase, "status": "passed", "results": [
+        {"command": ["pytest", "-q"], "status": "passed", "returncode": 0},
+    ]})
+
+
 def test_direct_final_answer():
     fake, _ = _scripted_llm([[_final_event("The answer is 42.")]])
     with patch.object(executor, "call_llm_stream", fake):
@@ -66,6 +73,73 @@ def test_direct_final_answer():
     assert "final_answer" in types
     final = next(e for e in events if e["type"] == "final_answer")
     assert final["content"] == "The answer is 42."
+
+
+def test_empty_provider_responses_are_retried_before_completion():
+    empty = _final_event("")
+    fake, state = _scripted_llm([[empty], [empty], [_final_event("Recovered.")]])
+    with patch.object(executor, "call_llm_stream", fake):
+        events = _run([{"role": "user", "content": "finish the task"}])
+
+    retries = [
+        event for event in events
+        if event["type"] == "status" and "empty response" in event.get("message", "")
+    ]
+    assert len(retries) == 2
+    assert events[-1] == {"type": "final_answer", "content": "Recovered."}
+    assert state["calls"] == 3
+
+
+def test_repeated_empty_provider_responses_fail_instead_of_completing():
+    fake, state = _scripted_llm([[_final_event("")]])
+    with patch.object(executor, "call_llm_stream", fake):
+        events = _run([{"role": "user", "content": "finish the task"}])
+
+    assert events[-1]["type"] == "error"
+    assert "empty response repeatedly" in events[-1]["message"]
+    assert not any(event["type"] == "final_answer" for event in events)
+    assert state["calls"] == executor.MAX_EMPTY_RESPONSE_RETRIES + 1
+
+
+def test_provider_request_timeout_is_retried_once_before_completion():
+    calls = {"count": 0}
+
+    async def slow_then_recover(_messages, _model):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            await asyncio.sleep(1)
+        yield _final_event("Recovered after timeout.")
+
+    with patch.object(executor, "call_llm_stream", slow_then_recover), \
+         patch.object(executor, "llm_call_timeout", return_value=0.01):
+        events = _run([{"role": "user", "content": "finish the task"}])
+
+    assert any(
+        event["type"] == "status" and "retrying once" in event.get("message", "")
+        for event in events
+    )
+    assert events[-1] == {
+        "type": "final_answer",
+        "content": "Recovered after timeout.",
+    }
+    assert calls["count"] == 2
+
+
+def test_repeated_provider_request_timeout_fails_the_turn():
+    calls = {"count": 0}
+
+    async def always_slow(_messages, _model):
+        calls["count"] += 1
+        await asyncio.sleep(1)
+        yield _final_event("too late")
+
+    with patch.object(executor, "call_llm_stream", always_slow), \
+         patch.object(executor, "llm_call_timeout", return_value=0.01):
+        events = _run([{"role": "user", "content": "finish the task"}])
+
+    assert events[-1]["type"] == "error"
+    assert "timed out" in events[-1]["message"]
+    assert calls["count"] == executor.MAX_PROVIDER_TIMEOUT_RETRIES + 1
 
 
 def test_streamed_text_emits_response_end_not_final_answer():
@@ -147,9 +221,9 @@ def test_free_model_never_falls_back_to_paid_or_unknown(monkeypatch):
         yield {"type": "stream_error", "error": "primary unavailable"}
 
     with patch.object(executor, "call_llm_stream", fake):
-        events = _run([{"role": "user", "content": "hi"}])
+        events = _run([{"role": "user", "content": "hi"}], model="groq/openai/gpt-oss-120b")
 
-    assert seen == [executor.DEFAULT_MODEL]
+    assert seen == ["groq/openai/gpt-oss-120b"]
     assert events[-1]["type"] == "error"
     assert not any("falling back" in e.get("message", "") for e in events)
     assert any("Skipped paid or unknown" in e.get("message", "") for e in events)
@@ -234,6 +308,108 @@ def test_completed_turn_has_no_budget_warning():
     assert not any(e["type"] == "blocked" for e in events)
 
 
+def test_first_mutation_requires_a_baseline_attempt():
+    scripts = [
+        [_tool_call_event(name="write_to_file", arguments='{"path":"a.py","content":"x"}')],
+        [_final_event("Stopped.")],
+    ]
+    fake, _ = _scripted_llm(scripts)
+    with patch.object(executor, "call_llm_stream", fake), \
+         patch.object(executor, "execute_tool_async", AsyncMock(return_value="wrote")) as execute:
+        events = _run([{"role": "user", "content": "change a.py"}])
+
+    execute.assert_not_called()
+    result = next(event["result"] for event in events if event["type"] == "tool_result")
+    assert "phase=baseline" in result
+
+
+def test_generic_bash_success_does_not_replace_full_verification():
+    scripts = [
+        [_tool_call_event(name="verify_project", arguments='{"phase":"baseline"}', call_id="baseline")],
+        [_tool_call_event(name="write_to_file", arguments='{"path":"a.py","content":"x"}', call_id="write")],
+        [_tool_call_event(name="run_bash_command", arguments='{"command":"echo ok"}', call_id="bash")],
+        [_final_event("Done without structured verification.")],
+        [_tool_call_event(name="verify_project", arguments='{"phase":"full"}', call_id="full")],
+        [_final_event("Verified.")],
+    ]
+    fake, state = _scripted_llm(scripts)
+
+    async def execute(name, _arguments):
+        if name == "verify_project":
+            return _verification(_arguments)
+        return "ok"
+
+    with patch.object(executor, "call_llm_stream", fake), \
+         patch.object(executor, "execute_tool_async", execute):
+        events = _run([{"role": "user", "content": "change and test"}])
+
+    assert state["calls"] == 6
+    assert events[-1]["type"] == "final_answer"
+    assert events[-1]["content"] == "Verified."
+    assert any(event.get("state") == "verifying" for event in events)
+
+
+def test_multi_file_change_requires_read_only_critic_after_full_verification():
+    scripts = [
+        [_tool_call_event(name="verify_project", arguments='{"phase":"baseline"}', call_id="baseline")],
+        [_tool_call_event(name="write_to_file", arguments='{"path":"a.py","content":"a"}', call_id="a")],
+        [_tool_call_event(name="write_to_file", arguments='{"path":"b.py","content":"b"}', call_id="b")],
+        [_tool_call_event(name="verify_project", arguments='{"phase":"full"}', call_id="full")],
+        [_final_event("Ready without review.")],
+        [_tool_call_event(name="request_critic", arguments='{"objective":"change two files"}', call_id="critic")],
+        [_final_event("Verified and reviewed.")],
+    ]
+    fake, state = _scripted_llm(scripts)
+    calls = []
+
+    async def execute(name, arguments):
+        calls.append((name, arguments))
+        if name == "verify_project":
+            return _verification(arguments)
+        if name == "request_critic":
+            return "APPROVED"
+        return "ok"
+
+    with patch.object(executor, "call_llm_stream", fake), \
+         patch.object(executor, "execute_tool_async", execute):
+        events = _run([{"role": "user", "content": "change two files"}])
+
+    assert state["calls"] == 7
+    critic_arguments = next(arguments for name, arguments in calls if name == "request_critic")
+    assert critic_arguments["_changed_files"] == ["a.py", "b.py"]
+    assert any("independent review" in event.get("message", "") for event in events)
+    assert events[-1]["content"] == "Verified and reviewed."
+
+
+def test_mutation_after_full_verification_requires_fresh_full_verification():
+    scripts = [
+        [_tool_call_event(name="verify_project", arguments='{"phase":"baseline"}', call_id="baseline")],
+        [_tool_call_event(name="write_to_file", arguments='{"path":"a.py","content":"one"}', call_id="write-1")],
+        [_tool_call_event(name="verify_project", arguments='{"phase":"full"}', call_id="full-1")],
+        [_tool_call_event(name="write_to_file", arguments='{"path":"a.py","content":"two"}', call_id="write-2")],
+        [_final_event("Done with stale verification.")],
+        [_tool_call_event(name="verify_project", arguments='{"phase":"full"}', call_id="full-2")],
+        [_final_event("Done with fresh verification.")],
+    ]
+    # This test isolates evidence freshness. Unknown-usage reservations and
+    # repeated phase exhaustion have separate resource-limit regressions.
+    for script in scripts:
+        for event in script:
+            event["usage"] = {"total_tokens": 100}
+    fake, state = _scripted_llm(scripts)
+
+    async def execute(name, _arguments):
+        return _verification(_arguments) if name == "verify_project" else "ok"
+
+    with patch.object(executor, "call_llm_stream", fake), \
+         patch.object(executor, "execute_tool_async", execute):
+        events = _run([{"role": "user", "content": "change a file twice"}])
+
+    assert state["calls"] == 7
+    assert events[-1]["content"] == "Done with fresh verification."
+    assert sum(event.get("state") == "verifying" for event in events) == 1
+
+
 # ── cycle detection ───────────────────────────────────────────────────────────
 
 def test_alternating_tool_calls_are_detected_as_a_loop():
@@ -314,14 +490,18 @@ def test_rerunning_a_command_with_changing_output_is_not_a_loop():
     edit = _tool_call_event(
         name="edit_file", arguments='{"path": "calc.py"}', call_id="e"
     )
-    scripts = [[run_tests], [edit], [run_tests], [edit], [run_tests], [_final_event("Green.")]]
+    baseline = _tool_call_event(name="verify_project", arguments='{"phase":"baseline"}', call_id="baseline")
+    full = _tool_call_event(name="verify_project", arguments='{"phase":"full"}', call_id="full")
+    scripts = [[baseline], [run_tests], [edit], [run_tests], [edit], [run_tests], [full], [_final_event("Green.")]]
     fake, _ = _scripted_llm(scripts)
 
     # Same command, different output each time — progress, not repetition.
-    results = iter(["1 failed", "edited", "1 failed, 1 passed", "edited", "2 passed", ""])
+    results = iter(["1 failed", "1 failed, 1 passed", "2 passed"])
 
     async def changing(name, args):
-        return next(results, "")
+        if name == "verify_project":
+            return _verification(args)
+        return next(results, "") if name == "run_bash_command" else "edited"
 
     with patch.object(executor, "call_llm_stream", fake), \
          patch.object(executor, "execute_tool_async", changing):
@@ -338,11 +518,14 @@ def test_rerunning_a_command_with_identical_output_is_a_loop():
         name="run_bash_command", arguments='{"command": "pytest -q"}', call_id="t"
     )
     edit = _tool_call_event(name="edit_file", arguments='{"path": "x.py"}', call_id="e")
-    scripts = [[run_tests], [edit], [run_tests], [edit], [run_tests], [edit], [run_tests]]
+    baseline = _tool_call_event(name="verify_project", arguments='{"phase":"baseline"}', call_id="baseline")
+    scripts = [[baseline], [run_tests], [edit], [run_tests], [edit], [run_tests], [edit], [run_tests]]
     fake, _ = _scripted_llm(scripts)
 
+    async def unchanged(name, args):
+        return _verification(args) if name == "verify_project" else "1 failed"
     with patch.object(executor, "call_llm_stream", fake), \
-         patch.object(executor, "execute_tool_async", AsyncMock(return_value="1 failed")):
+         patch.object(executor, "execute_tool_async", unchanged):
         events = _run([{"role": "user", "content": "fix the tests"}])
 
     assert any(e["type"] == "blocked" for e in events), (

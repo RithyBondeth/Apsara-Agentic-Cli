@@ -7,7 +7,8 @@ import asyncio
 from typing import Any, AsyncGenerator
 import litellm
 from apsara_cli.engine.models import DEFAULT_MODEL, resolve_litellm_request
-from apsara_cli.engine.tools import get_agent_tools
+from apsara_cli.engine.tools import get_request_tools
+from apsara_cli.engine.model_capabilities import model_capabilities, completion_limit, compatibility_error
 
 import os as _os
 # Silence huggingface_hub's unauthenticated-request warning triggered by
@@ -18,8 +19,21 @@ litellm.return_response_headers = True
 # Max tokens per completion. Kept generous enough to avoid truncating
 # multi-step tool calls and longer code responses; override per-call if needed.
 DEFAULT_MAX_COMPLETION_TOKENS = 4096
+DEFAULT_LLM_CALL_TIMEOUT = 180.0
 
 _RETRY_DELAYS = [5, 15, 30]
+
+
+def llm_call_timeout() -> float:
+    """Bound one provider request without letting project files raise the limit."""
+    raw = _os.environ.get("APSARA_LLM_CALL_TIMEOUT")
+    if not raw:
+        return DEFAULT_LLM_CALL_TIMEOUT
+    try:
+        value = float(raw)
+    except ValueError:
+        return DEFAULT_LLM_CALL_TIMEOUT
+    return max(30.0, min(value, 600.0))
 
 
 def _rate_limits_from_response(value: Any) -> dict[str, str]:
@@ -57,19 +71,15 @@ def _rate_limits_from_response(value: Any) -> dict[str, str]:
     return {key: item for key, item in result.items() if item is not None}
 
 
-def estimate_request_tokens(messages: list[dict], model: str = DEFAULT_MODEL) -> int:
+def estimate_request_tokens(messages: list[dict], model: str = DEFAULT_MODEL, *, with_tools: bool = True) -> int:
     try:
         resolved_model, _provider_options = resolve_litellm_request(model)
-        return litellm.token_counter(
-            model=resolved_model,
-            messages=messages,
-            tools=get_agent_tools(),
-            tool_choice="auto",
-        )
+        options = {"tools": get_request_tools(), "tool_choice": "auto"} if with_tools else {}
+        return litellm.token_counter(model=resolved_model, messages=messages, **options)
     except Exception:
         return max(
             1,
-            sum(len(str(message.get("content", ""))) for message in messages) // 4,
+            len(json.dumps({"messages": messages, "tools": get_request_tools() if with_tools else []}, ensure_ascii=False, default=str)) // 3,
         )
 
 
@@ -98,11 +108,14 @@ async def summarize_messages_with_usage(
 
     try:
         resolved_model, provider_options = resolve_litellm_request(model)
-        response = await litellm.acompletion(
-            model=resolved_model,
-            messages=summary_messages,
-            max_tokens=300,
-            **provider_options,
+        response = await asyncio.wait_for(
+            litellm.acompletion(
+                model=resolved_model,
+                messages=summary_messages,
+                max_tokens=completion_limit(model, 300),
+                **provider_options,
+            ),
+            timeout=llm_call_timeout(),
         )
         usage = response.usage.model_dump() if response.usage else {}
         if usage:
@@ -120,6 +133,12 @@ async def summarize_messages_with_usage(
                 "auxiliary_calls": 1,
             }
         return response.choices[0].message.content.strip(), usage
+    except asyncio.TimeoutError:
+        return (
+            f"[Summary failed: Provider response timed out after "
+            f"{llm_call_timeout():g} seconds.]",
+            {},
+        )
     except Exception as e:
         return f"[Summary failed: {e}]", {}
 
@@ -135,32 +154,46 @@ def _is_malformed_tool_call(exc: Exception) -> bool:
     return "tool_use_failed" in text or "failed_generation" in text
 
 
-async def call_llm(messages: list[dict], model: str = DEFAULT_MODEL) -> tuple[Any, Any]:
+async def call_llm(
+    messages: list[dict], model: str = DEFAULT_MODEL, *, with_tools: bool = True,
+    max_completion_tokens: int = DEFAULT_MAX_COMPLETION_TOKENS,
+) -> tuple[Any, Any]:
     """
     Send the conversation to LLM with configured tools via LiteLLM.
     Returns (Response Message Object, Usage Dictionary Object)
     """
     from apsara_cli.cli.auth import credentials_present_for_model
     if not credentials_present_for_model(model):
-        return {"error": f"No API key found for model '{model}'. Run 'apsara login' to add one."}, {}
+        return {"error": f"No API key found for model '{model}'. Start `apsara` and add it when prompted."}, {}
 
     try:
+        model_capabilities(model).require(tools=with_tools, streaming=False)
         resolved_model, provider_options = resolve_litellm_request(model)
-        response = await litellm.acompletion(
-            model=resolved_model,
-            messages=messages,
-            tools=get_agent_tools(),
-            tool_choice="auto",
-            max_tokens=DEFAULT_MAX_COMPLETION_TOKENS,
-            **provider_options,
+        request_options: dict[str, Any] = {}
+        if with_tools:
+            request_options.update(tools=get_request_tools(), tool_choice="auto")
+        response = await asyncio.wait_for(
+            litellm.acompletion(
+                model=resolved_model,
+                messages=messages,
+                max_tokens=completion_limit(model, max_completion_tokens),
+                **request_options,
+                **provider_options,
+            ),
+            timeout=llm_call_timeout(),
         )
         return response.choices[0].message, response.usage.model_dump() if response.usage else {}
+    except asyncio.TimeoutError:
+        return {
+            "error": f"Provider response timed out after {llm_call_timeout():g} seconds."
+        }, {}
     except Exception as e:
-        return {"error": str(e)}, {}
+        return {"error": compatibility_error(e)}, {}
 
 
 async def call_llm_stream(
-    messages: list[dict], model: str = DEFAULT_MODEL
+    messages: list[dict], model: str = DEFAULT_MODEL, *, tools: list[dict] | None = None,
+    max_completion_tokens: int = DEFAULT_MAX_COMPLETION_TOKENS,
 ) -> AsyncGenerator[dict, None]:
     """
     Streaming LLM call with automatic retry on rate-limit errors.
@@ -172,18 +205,19 @@ async def call_llm_stream(
     """
     from apsara_cli.cli.auth import credentials_present_for_model
     if not credentials_present_for_model(model):
-        yield {"type": "stream_error", "error": f"No API key found for model '{model}'. Run 'apsara login' to add one."}
+        yield {"type": "stream_error", "error": f"No API key found for model '{model}'. Start `apsara` and add it when prompted."}
         return
 
     for attempt in range(len(_RETRY_DELAYS) + 1):
         try:
+            model_capabilities(model).require(tools=True, streaming=True)
             resolved_model, provider_options = resolve_litellm_request(model)
             response = await litellm.acompletion(
                 model=resolved_model,
                 messages=messages,
-                tools=get_agent_tools(),
+                tools=get_request_tools() if tools is None else tools,
                 tool_choice="auto",
-                max_tokens=DEFAULT_MAX_COMPLETION_TOKENS,
+                max_tokens=completion_limit(model, max_completion_tokens),
                 stream=True,
                 stream_options={"include_usage": True},
                 **provider_options,
@@ -277,5 +311,5 @@ async def call_llm_stream(
                     ),
                 }
                 return
-            yield {"type": "stream_error", "error": str(e)}
+            yield {"type": "stream_error", "error": compatibility_error(e)}
             return

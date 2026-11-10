@@ -11,6 +11,8 @@ from apsara_cli.engine.tools import (
     delete_file,
     move_file,
     glob_search,
+    undo_last_checkpoint,
+    undo_turn_checkpoint,
 )
 
 
@@ -87,6 +89,13 @@ def test_create_directory_nested(tmp_path):
     assert (tmp_path / "a" / "b" / "c").is_dir()
 
 
+def test_create_directory_rejected(tmp_path):
+    with _ctx(tmp_path, confirm=False):
+        result = create_directory("blocked")
+    assert "not approved" in result
+    assert not (tmp_path / "blocked").exists()
+
+
 def test_create_directory_already_exists(tmp_path):
     (tmp_path / "existing").mkdir()
     with _ctx(tmp_path):
@@ -99,6 +108,42 @@ def test_create_directory_outside_workspace(tmp_path):
     with _ctx(tmp_path):
         result = create_directory("/tmp/evil")
     assert "Error" in result
+
+
+def test_agent_checkpoint_restore_requires_approval(tmp_path, monkeypatch):
+    from apsara_cli.engine import checkpoints
+
+    called = False
+
+    def restore(*_args, **_kwargs):
+        nonlocal called
+        called = True
+        return {"id": "x", "label": "x", "restored": [], "removed": []}
+
+    monkeypatch.setattr(checkpoints, "restore_checkpoint", restore)
+    with _ctx(tmp_path, confirm=False):
+        result = undo_last_checkpoint()
+
+    assert "not approved" in result
+    assert called is False
+
+
+def test_agent_turn_rollback_requires_approval(tmp_path, monkeypatch):
+    from apsara_cli.engine import turn_checkpoints
+
+    called = False
+
+    def restore(*_args, **_kwargs):
+        nonlocal called
+        called = True
+        return {"id": "x", "rollback": {}}
+
+    monkeypatch.setattr(turn_checkpoints, "restore_turn_checkpoint", restore)
+    with _ctx(tmp_path, confirm=False):
+        result = undo_turn_checkpoint()
+
+    assert "not approved" in result
+    assert called is False
 
 
 # ── delete_file ───────────────────────────────────────────────────────────────

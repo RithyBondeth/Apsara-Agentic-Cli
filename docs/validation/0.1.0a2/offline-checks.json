@@ -1,0 +1,91 @@
+{
+  "runtime_commit": "84ebde509593a2db6b267b198f3d6af1e7666e7e",
+  "source_digest": "e693a6573a66f8a21f5e360e42ac74be5755718174bc598541a2024161927e80",
+  "local_tests_passed": 529,
+  "python": "3.12.14",
+  "platform": "macOS",
+  "ci_checks": [
+    {
+      "name": "test (macos-latest, 3.13)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "test (macos-latest, 3.11)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "pipx (macos-latest, Python 3.14)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "pipx (macos-latest, Python 3.10)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "test (macos-latest, 3.14)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "test (macos-latest, 3.12)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "test (macos-latest, 3.10)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "pipx (ubuntu-latest, Python 3.14)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "test (ubuntu-latest, 3.14)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "test (ubuntu-latest, 3.13)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "windows-smoke",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "pipx (ubuntu-latest, Python 3.10)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "test (ubuntu-latest, 3.10)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "test (ubuntu-latest, 3.12)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "test (ubuntu-latest, 3.11)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "pipx (windows-latest, Python 3.10)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "pipx (windows-latest, Python 3.14)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "package",
+      "state": "SUCCESS"
+    }
+  ],
+  "installed_dependency_audit": "No known vulnerabilities found",
+  "artifact_checks": [
+    "wheel/sdist metadata",
+    "clean install",
+    "pip check",
+    "version/help",
+    "pipx install/init/diagnostics/upgrade/uninstall"
+  ],
+  "no_key_doctor": "Expected missing provider credentials; not all checks passed",
+  "runtime_ci_url": "https://github.com/RithyBondeth/Apsara-Agentic-Cli/actions/runs/37204528670"
+}

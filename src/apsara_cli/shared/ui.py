@@ -29,6 +29,7 @@ except ImportError:
     msvcrt = None
 
 from apsara_cli.shared.text import format_rich_text_lines, truncate_text
+from apsara_cli.shared.mascot import Makor, ascii_required
 
 
 # ── Terminal helpers ──────────────────────────────────────────────────────────
@@ -106,6 +107,34 @@ class Theme:
 
 DEFAULT_THEME = Theme()
 
+# Shared dark surface used by transcript cards and the full-screen TUI's
+# composer/sidebar. Keeping both representations here prevents the three
+# boxed surfaces from drifting apart again.
+PANEL_BACKGROUND_HEX = "#191d2b"
+PANEL_BACKGROUND_ANSI = "48;2;25;29;43"
+
+
+# Blanket approval is intentionally allowlisted to reversible workspace
+# changes. Unknown and newly added actions therefore require an explicit
+# decision until they have been reviewed here.
+_BLANKET_APPROVAL_ACTIONS = frozenset({
+    "create_directory",
+    "write_to_file",
+    "edit_file",
+    "replace_file_lines",
+    "delete_file",
+    "move_file",
+    "replace_symbol",
+    "remember_project_note",
+    "undo_checkpoint",
+    "undo_turn",
+})
+
+
+def action_allows_blanket_approval(action: str) -> bool:
+    return action in _BLANKET_APPROVAL_ACTIONS
+
+
 _BRAILLE = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
 # OpenCode-style accents shared across the renderer.
@@ -138,6 +167,10 @@ def describe_action(
             payload.get("diff_editor") if isinstance(payload.get("diff_editor"), str) else None,
             path,
         )
+
+    if action == "create_directory":
+        path = payload.get("display_path") or payload.get("path", "<unknown>")
+        return (f"Create directory {path}", None, None, None, None, path)
 
     if action == "edit_file":
         path = payload.get("display_path") or payload.get("path", "<unknown>")
@@ -203,7 +236,22 @@ def describe_action(
         return (f"Restore checkpoint {payload.get('checkpoint_id', 'latest')}?", None, None, None, None, None)
 
     if action == "undo_turn":
+        if payload.get("force"):
+            return (f"Force rollback of agent turn {payload.get('turn_id', 'latest')}?",
+                    "This overwrites conflicting edits made after the turn. Review /diff first.", None, None, None, None)
         return (f"Roll back agent turn {payload.get('turn_id', 'latest')}?", None, None, None, None, None)
+
+    if action == "export_diagnostic_content":
+        count = payload.get("message_count", 0)
+        return (
+            "Include conversation and tool content in diagnostics?",
+            f"This bundle will include content from {count} message(s). "
+            "Recognizable credentials are still redacted, but you must review every file before sharing.",
+            None,
+            None,
+            None,
+            None,
+        )
 
     if action == "remember_project_note":
         return ("Save this note to project memory?", str(payload.get("note", "")), None, None, None, None)
@@ -252,6 +300,7 @@ class ConsoleUI:
         self.approve_all = auto_approve
         self.typing_delay = typing_delay if sys.stdout.isatty() and not os.environ.get("CI") else 0.0
         self.theme = theme or DEFAULT_THEME
+        self.mascot = Makor()
 
         self.hidden_events: list[Any] = []
         self.latest_hidden_events: list[Any] = []
@@ -284,15 +333,29 @@ class ConsoleUI:
         self._session_uses_promotional_pricing: bool = False
         self._context_tokens: int = 0
         self._context_budget: int = 0
+        self._run_budget: dict[str, Any] = {}
+        self._budget_warning_shown = False
 
-        self.spinner_message = "Apsara is working"
+        self.spinner_message = "Makor is working"
         self.spinner_stop_event = threading.Event()
         self.spinner_thread: Optional[threading.Thread] = None
         self.spinner_lock = threading.Lock()
         self._spinner_start_time: float = 0.0
         self._spinner_frame_index: int = 0
         self._spinner_color_index: int = 0
+        self._spinner_rows: int = 0
         self._stream_buffer: list[str] = []
+
+    def _mascot_changed(self) -> None:
+        """TUI subclasses repaint without writing into the transcript."""
+
+    def set_mascot_state(self, state: str) -> None:
+        if self.mascot.set_state(state):
+            self._mascot_changed()
+
+    def on_agent_event(self, event: dict[str, Any]) -> None:
+        if self.mascot.observe(event):
+            self._mascot_changed()
 
     def _ensure_log_file(self) -> None:
         if self._logging_attempted:
@@ -395,57 +458,73 @@ class ConsoleUI:
 
     # ── Rich text renderer ────────────────────────────────────────────────────
 
-    def render_markdown_panel(self, text: str) -> None:
-        """Render an assistant response in a padded transcript card."""
+    def _markdown_card_lines(
+        self,
+        text: str,
+        *,
+        width: Optional[int] = None,
+        timestamp: Optional[str] = None,
+    ) -> list[str]:
+        """Format a Markdown response in the original filled answer card."""
         from rich.console import Console
         from rich.markdown import Markdown
         from rich.text import Text
 
-        card_width = max(32, self.content_width() - 2)
-        body_width = max(29, card_width - 1)
-        horizontal_padding = 3
-        render_width = max(23, body_width - (horizontal_padding * 2))
+        panel_width = max(4, width or self.content_width())
+        card_width = max(2, panel_width - 2)
+        body_width = max(1, card_width - 1)
+        horizontal_padding = min(3, max(0, (body_width - 1) // 2))
+        render_width = max(1, body_width - (horizontal_padding * 2))
         rendered = StringIO()
         console = Console(
             file=rendered,
             force_terminal=self.use_color,
             color_system="truecolor" if self.use_color else None,
             width=render_width,
+            # Rich 15 ignores an explicit width on a dumb terminal unless a
+            # height is also supplied. Pin both so cards never spill into the
+            # sidebar in captured terminals or CI.
+            height=25,
             legacy_windows=False,
         )
         body = text.strip() or "_No response content._"
         console.print(Markdown(body, code_theme="monokai"))
 
         rail = self.style("▌", "1", "38;2;104;205;220")
-        background = "48;2;24;25;29"
         foreground = "38;2;225;230;242"
-        timestamp = datetime.now().strftime("%I:%M %p").lstrip("0")
+        # Terminal cells cannot use a smaller font, so keep card metadata
+        # compact and faint instead of letting it compete with the message.
+        timestamp = timestamp or datetime.now().strftime("%I:%M").lstrip("0")
 
         def card_line(content: str = "") -> str:
-            # Rich emits resets inside highlighted Markdown. Re-apply the
-            # card background after each reset so the panel stays continuous.
             visual_width = Text.from_ansi(content).cell_len
             content += " " * max(render_width - visual_width, 0)
             if self.use_color:
-                content = content.replace("\033[0m", f"\033[0m\033[{background}m")
-            padded = (
-                (" " * horizontal_padding)
-                + content
-                + (" " * horizontal_padding)
+                content = content.replace(
+                    "\033[0m", f"\033[0m\033[{PANEL_BACKGROUND_ANSI}m"
+                )
+            gutter = " " * horizontal_padding
+            return (
+                f"  {rail}"
+                f"{self.style(gutter + content + gutter, foreground, PANEL_BACKGROUND_ANSI)}"
             )
-            return f"  {rail}{self.style(padded, foreground, background)}"
 
-        self.print_line(card_line(" " * render_width))
+        lines = [card_line(" " * render_width)]
         for line in rendered.getvalue().rstrip("\n").splitlines() or [""]:
-            self.print_line(card_line(line))
-        self.print_line(card_line(" " * render_width))
-        footer = f"apsara  {timestamp}".ljust(render_width)
+            lines.append(card_line(line))
+        lines.append(card_line(" " * render_width))
+        footer = f"apsara  {timestamp}"[:render_width].ljust(render_width)
         if self.use_color:
-            footer = self.style(footer, "38;2;132;136;146").replace(
-                "\033[0m", f"\033[0m\033[{background}m"
+            footer = self.style(footer, "2", "38;2;112;116;126").replace(
+                "\033[0m", f"\033[0m\033[{PANEL_BACKGROUND_ANSI}m"
             )
-        self.print_line(card_line(footer))
-        self.print_line(card_line(" " * render_width))
+        lines.extend([card_line(footer), card_line(" " * render_width)])
+        return lines
+
+    def render_markdown_panel(self, text: str) -> None:
+        """Render an assistant response in the shared filled panel."""
+        for line in self._markdown_card_lines(text):
+            self.print_line(line)
 
     def render_rich_text(self, text: str, typing_delay: float = 0.0) -> None:
         import re as _re
@@ -622,11 +701,36 @@ class ConsoleUI:
         frame_idx = 0
         while not self.spinner_stop_event.is_set():
             with self.spinner_lock:
-                sys.stdout.write(f"\r\033[2K  {self.compose_spinner_line(frame_idx)}")
+                lines = self.compose_activity_lines(frame_idx)
+                sys.stdout.write("\r" + (f"\033[{self._spinner_rows - 1}A" if self._spinner_rows > 1 else ""))
+                sys.stdout.write("\n".join("\033[2K" + line for line in lines))
+                self._spinner_rows = len(lines)
                 sys.stdout.flush()
             frame_idx += 1
             if self.spinner_stop_event.wait(0.08):
                 break
+
+    def compose_activity_lines(self, frame_idx: int = 0) -> list[str]:
+        """Place the compact head directly beside the current activity text."""
+        if not self.mascot.enabled:
+            return [f"  {self.compose_spinner_line(frame_idx)}"]
+        from rich.text import Text
+
+        head = self.mascot.render_head(color=self.use_color, ascii_only=ascii_required())
+        message = self.spinner_message
+        if self.mascot.state in {"waiting", "retrying", "verifying", "speaking"}:
+            message = self.mascot.label(ascii_only=True).split(" | ", 1)[1]
+        elapsed = time.monotonic() - self._spinner_start_time if self._spinner_start_time else 0
+        text = Text(message, style="rgb(190,195,210)" if self.use_color else None)
+        if elapsed >= 2 and self.mascot.state not in {"waiting", "retrying"}:
+            text.append(f" {elapsed:.0f}s", style="rgb(130,125,140)" if self.use_color else None)
+        text.truncate(max(1, self.content_width() - 11), overflow="ellipsis")
+        if ascii_required():
+            text = Text(text.plain.replace("…", "."))
+        # Text aligns with the face on the lower of the two small icon rows.
+        label = self.style(text.plain, "38;2;190;195;210")
+        return ["  " + line + ("  " + label if index == 1 else "")
+                for index, line in enumerate(head)]
 
     def start_spinner(self, message: str) -> None:
         self.spinner_message = message
@@ -636,6 +740,7 @@ class ConsoleUI:
         if self.spinner_thread and self.spinner_thread.is_alive():
             return
         self._spinner_start_time = time.monotonic()
+        self._spinner_rows = 0
         self.spinner_stop_event.clear()
         self.spinner_thread = threading.Thread(target=self._spinner_worker, daemon=True)
         self.spinner_thread.start()
@@ -646,15 +751,20 @@ class ConsoleUI:
         self.spinner_stop_event.set()
         self.spinner_thread.join(timeout=0.3)
         with self.spinner_lock:
-            sys.stdout.write("\r\033[2K")
+            sys.stdout.write("\r" + (f"\033[{self._spinner_rows - 1}A" if self._spinner_rows > 1 else ""))
+            sys.stdout.write("\n".join("\033[2K" for _ in range(max(1, self._spinner_rows))))
+            if self._spinner_rows > 1:
+                sys.stdout.write(f"\033[{self._spinner_rows - 1}A")
+            sys.stdout.write("\r")
             sys.stdout.flush()
+        self._spinner_rows = 0
         self.spinner_thread = None
 
     def update_spinner_action(self, action: str) -> None:
         with self.spinner_lock:
             self.spinner_message = action
 
-    def note_working(self, message: str = "Apsara is working") -> None:
+    def note_working(self, message: str = "Makor is working") -> None:
         if self.work_notice_shown:
             return
         self.start_spinner(message)
@@ -756,12 +866,9 @@ class ConsoleUI:
         return f"\n{bar} "
 
     def session_saved(self, session_path: Path) -> None:
-        # Show the shortest useful form of the path, not the full absolute one.
-        try:
-            display: Path | str = session_path.relative_to(Path.cwd())
-        except ValueError:
-            display = session_path
-        self.print_line(f"  {self.dim(f'  ↳ saved · {display}')}")
+        # Saving is routine and visible through /sessions; keep normal turns
+        # focused on the conversation.
+        return
 
     def calculate_session_cost(self) -> Optional[float]:
         """Known session cost, or None if any provider pricing is unknown."""
@@ -901,25 +1008,9 @@ class ConsoleUI:
             add_usage(target, tokens)
         self._recalculate_session_cost()
 
-        st = self._session_total_tokens
-        session_short = f"{st / 1000:.1f}K" if st >= 1000 else str(st)
-        details = [f"in {p:,}", f"out {c:,}"]
-        if normalized["cached_tokens"]:
-            details.append(f"cached {normalized['cached_tokens']:,}")
-        if normalized["cache_creation_tokens"]:
-            details.append(f"cache write {normalized['cache_creation_tokens']:,}")
-        if normalized["reasoning_tokens"]:
-            details.append(f"reasoning {normalized['reasoning_tokens']:,}")
-        if normalized["estimated_input_tokens"]:
-            details.append(
-                f"~{normalized['estimated_input_tokens']:,} estimated input/unreported"
-            )
-        self.print_line(f"    {self.dim(' · '.join(details))}")
-        self.print_line(
-            f"    {self.dim(f'{t:,} tok · session {session_short} · {self.session_cost_label()}')}"
-        )
-        if self.rate_limit_label():
-            self.print_line(f"    {self.dim('limit · ' + self.rate_limit_label())}")
+        # Usage remains available in the sidebar and through /usage or /status.
+        # Printing it after every response makes the operational metadata more
+        # prominent than the answer itself.
 
     def record_interrupted_usage(self, estimated_tokens: int, model: str) -> None:
         """Persist an honest local estimate for a call cancelled mid-stream."""
@@ -989,21 +1080,33 @@ class ConsoleUI:
 
     def begin_turn(self) -> None:
         self.stop_spinner()
+        self.spinner_message = "Makor is thinking"
+        self._spinner_start_time = time.monotonic()
+        self.last_run_state = "running"
+        self.mascot.begin_turn()
+        self._mascot_changed()
         self.current_turn_hidden_events = []
         self.work_notice_shown = False
         self._turn_outcome = ""
         self._thought_pending = True
         self._turn_started_at = time.monotonic()
+        self._run_budget = {}
+        self._budget_warning_shown = False
 
     def finish_turn(self, model_label: Optional[str] = None, mode: str = "Build") -> None:
-        """OpenCode-style turn footer: '◼ Build · Big Pickle · 7.0s'."""
+        """Record turn details and surface only outcomes that need attention."""
         self.stop_spinner()
+        self.mascot.finish_turn(self._turn_outcome, getattr(self, "last_run_state", "completed"))
+        self._mascot_changed()
         self.latest_hidden_events = list(self.current_turn_hidden_events)
         count = len(self.latest_hidden_events)
 
         elapsed_text = _fmt_elapsed(time.monotonic() - self._turn_started_at)
 
         outcome = self._turn_outcome or "ok"
+        if outcome == "ok":
+            return
+
         if outcome == "error":
             square = self.style("◼", "38;2;220;100;100")
         elif outcome == "blocked":
@@ -1017,8 +1120,7 @@ class ConsoleUI:
         if count:
             plural = "s" if count != 1 else ""
             tail.append(f"{count} step{plural} · /details")
-        if outcome != "ok":
-            tail.append(outcome)
+        tail.append(outcome)
 
         self.print_line()
         self.print_line(
@@ -1134,12 +1236,19 @@ class ConsoleUI:
         with self.raw_terminal():
             return self.read_raw_key()
 
-    def prompt_confirmation_choice(self, *, allow_view: bool = False, allow_editor: bool = False) -> str:
+    def prompt_confirmation_choice(
+        self,
+        *,
+        allow_view: bool = False,
+        allow_editor: bool = False,
+        allow_always: bool = True,
+    ) -> str:
         options = [
             f"{self.badge('↵  approve', '17', '48;2;80;170;140')}",
             f"{self.badge('n  reject', '17', '48;2;200;100;80')}",
-            f"{self.badge('a  always', '17', '48;2;80;120;200')}",
         ]
+        if allow_always:
+            options.append(f"{self.badge('a  always', '17', '48;2;80;120;200')}")
         if allow_view:
             options.append(f"{self.badge('v  full diff', '17', '48;2;80;95;125')}")
         if allow_editor:
@@ -1151,7 +1260,7 @@ class ConsoleUI:
             if key in {"", "\r", "\n", "y", "Y"}:
                 self.print_line(f"  {self.style('  ↳ approved', '38;2;120;200;150')}")
                 return "approve"
-            if key in {"a", "A"}:
+            if allow_always and key in {"a", "A"}:
                 self.print_line(f"  {self.style('  ↳ always approve enabled', '38;2;120;180;255')}")
                 return "always"
             if allow_view and key in {"v", "V"}:
@@ -1163,25 +1272,29 @@ class ConsoleUI:
                 return "reject"
 
     def confirm_action(self, action: str, payload: dict[str, Any]) -> bool:
-        # Executing workspace-supplied code is never covered by a blanket
-        # approval: --auto-approve (and 'a' during a turn) waive confirmation
-        # for file writes, which is a much weaker consent than "run this code".
-        is_trust = action == "trust_workspace_code"
+        allows_blanket = action_allows_blanket_approval(action) and not (
+            action == "undo_turn" and payload.get("force")
+        )
 
-        if self.approve_all and not is_trust:
+        if self.approve_all and allows_blanket:
             return True
 
         if not sys.stdin.isatty():
-            if is_trust:
+            if action == "trust_workspace_code":
                 self.error(
                     f"{payload.get('display_path', 'This workspace code')} needs approval "
-                    "before it can run, but stdin is not interactive. Run `apsara chat` "
+                    "before it can run, but stdin is not interactive. Run `apsara` "
                     "in this project once to review and approve it."
                 )
-            else:
+            elif allows_blanket:
                 self.error(
                     f"Approval required for {action}, but stdin is not interactive. "
                     "Re-run with --auto-approve if you trust this action."
+                )
+            else:
+                self.error(
+                    f"Explicit approval required for {action}, but stdin is not interactive. "
+                    "This action is not covered by --auto-approve."
                 )
             return False
 
@@ -1208,6 +1321,7 @@ class ConsoleUI:
             choice = self.prompt_confirmation_choice(
                 allow_view=bool(diff_full and diff_full != diff_preview),
                 allow_editor=bool(diff_editor),
+                allow_always=allows_blanket,
             )
             if choice == "view":
                 self.print_line()
@@ -1218,10 +1332,11 @@ class ConsoleUI:
                 self._open_editor_preview(title, diff_editor or diff_full or diff_preview or "", path_hint)
                 continue
             if choice == "always":
-                # Approving one plugin must not also silence file-write
-                # confirmations; the trust store already remembers this one.
-                if not is_trust:
+                if allows_blanket:
                     self.approve_all = True
+                # Defensive fallback for custom prompt implementations: an
+                # unsupported "always" response becomes approval for this
+                # action only, never a blanket grant.
                 return True
             return choice == "approve"
 

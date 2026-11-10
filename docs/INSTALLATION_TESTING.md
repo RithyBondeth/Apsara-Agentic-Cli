@@ -7,7 +7,7 @@ checkout. `scripts/pipx_smoke.py` tests that exact boundary in an isolated
 ## CI matrix
 
 GitHub Actions runs the lifecycle on Ubuntu, macOS, and Windows using Python
-3.10 and 3.13, the oldest and newest supported versions. Each job:
+3.10 and 3.14, the oldest and newest supported versions. Each job:
 
 1. builds one wheel;
 2. installs it with `pipx`;

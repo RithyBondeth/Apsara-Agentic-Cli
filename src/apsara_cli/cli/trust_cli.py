@@ -1,7 +1,8 @@
 """`apsara trust` — review and revoke approvals for workspace-supplied code.
 
-Approving a plugin or an MCP server is a security decision, so it needs to be
-inspectable and reversible without hand-editing JSON.
+Approving a plugin, MCP server, verification command, or hook is a security
+decision, so it needs to be inspectable and reversible without hand-editing
+JSON.
 """
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,10 @@ def _describe_key(key: str) -> tuple[str, str]:
         return "plugin", key[len("plugin:"):]
     if key.startswith("mcp:"):
         return "mcp", key[len("mcp:"):]
+    if key.startswith("hooks:"):
+        return "hooks", key[len("hooks:"):]
+    if key.startswith("verification:"):
+        return "verification", key[len("verification:"):]
     return "other", key
 
 
@@ -48,7 +53,7 @@ def trust_command(args: Any, config: Any) -> int:
         )
         ui.print_line()
         ui.print_line(
-            f"  {ui.dim('Plugins and MCP servers here will ask for approval again.')}"
+            f"  {ui.dim('Executable workspace definitions will ask for approval again.')}"
         )
         return 0
 
@@ -64,7 +69,7 @@ def trust_command(args: Any, config: Any) -> int:
         ui.info("No workspace code has been approved here.")
         ui.print_line()
         ui.print_line(
-            f"  {ui.dim('Local plugins (.apsara/tools/*.py) and MCP servers need approval')}"
+            f"  {ui.dim('Plugins, MCP servers, verification commands, and hooks need approval')}"
         )
         ui.print_line(
             f"  {ui.dim('before they run. You will be prompted the first time.')}"
@@ -77,7 +82,12 @@ def trust_command(args: Any, config: Any) -> int:
         approved_at = entry.get("approved_at", "unknown") if isinstance(entry, dict) else "unknown"
         digest = entry.get("sha256", "") if isinstance(entry, dict) else ""
 
-        colour = "38;2;130;170;250" if kind == "mcp" else "38;2;120;200;150"
+        colours = {
+            "mcp": "38;2;130;170;250",
+            "hooks": "38;2;230;170;90",
+            "verification": "38;2;180;150;250",
+        }
+        colour = colours.get(kind, "38;2;120;200;150")
         ui.print_line(
             f"  {ui.style('◆', colour)} {ui.style(subject, '1', '38;2;220;225;240')}  "
             f"{ui.style(kind, colour)}"

@@ -1,0 +1,79 @@
+{
+  "runtime_commit": "4646193007153dfd95d4e10ac0b2030059217090",
+  "source_digest": "8ee7a48c62025628bbeb220e6c39481acbdb4010f1de84973394fb87036a5fcd",
+  "local_tests_passed": 554,
+  "ci_checks": [
+    {
+      "name": "test (macos-latest, 3.10)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "test (macos-latest, 3.12)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "test (macos-latest, 3.13)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "test (macos-latest, 3.11)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "pipx (macos-latest, Python 3.14)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "pipx (macos-latest, Python 3.10)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "test (macos-latest, 3.14)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "pipx (ubuntu-latest, Python 3.14)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "test (ubuntu-latest, 3.12)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "pipx (windows-latest, Python 3.14)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "test (ubuntu-latest, 3.14)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "test (ubuntu-latest, 3.13)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "windows-smoke",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "pipx (ubuntu-latest, Python 3.10)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "test (ubuntu-latest, 3.10)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "test (ubuntu-latest, 3.11)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "pipx (windows-latest, Python 3.10)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "package",
+      "state": "SUCCESS"
+    }
+  ]
+}

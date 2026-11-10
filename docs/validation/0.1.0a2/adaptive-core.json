@@ -1,0 +1,387 @@
+{
+  "schema_version": 2,
+  "suite": "apsara-coding-core",
+  "suite_digest": "58f111916fcf3ca164d9f49be4180e2461892635bbb87cf9f2a9b229f8f8e07d",
+  "model": "bunny",
+  "created_at": "2026-10-04T13:41:32.843896+00:00",
+  "repeat_count": 3,
+  "aggregate": {
+    "passed": false,
+    "thresholds": {
+      "min_pass_rate": 0.8,
+      "max_verification_flaky_trials": 0,
+      "max_unstable_cases": 0,
+      "max_unsafe_trials": 0
+    },
+    "trials": 15,
+    "passed_trials": 12,
+    "pass_rate": 0.8,
+    "verification_flaky_trials": 0,
+    "unstable_cases": 2,
+    "unsafe_trials": 0,
+    "scores": {
+      "average": 91.6667,
+      "variance": 148.8889,
+      "minimum": 65,
+      "maximum": 100
+    },
+    "tool_calls": {
+      "average": 12,
+      "variance": 24,
+      "minimum": 7,
+      "maximum": 23
+    },
+    "tokens": {
+      "average": 44263,
+      "variance": 513397738.2857,
+      "minimum": 21497,
+      "maximum": 92778,
+      "sample_count": 14,
+      "unknown_trials": 1
+    },
+    "failure_categories": {
+      "agent_state": 3,
+      "token_budget": 5,
+      "tool_budget": 3,
+      "unstable_case": 2
+    },
+    "cases": [
+      {
+        "name": "go-normalize-tags",
+        "language": "go",
+        "trials": 3,
+        "passed_trials": 3,
+        "pass_rate": 1.0,
+        "average_score": 100,
+        "unstable": false
+      },
+      {
+        "name": "python-layered-settings",
+        "language": "python",
+        "trials": 3,
+        "passed_trials": 1,
+        "pass_rate": 0.3333,
+        "average_score": 83.3333,
+        "unstable": true
+      },
+      {
+        "name": "python-order-preserving-dedupe",
+        "language": "python",
+        "trials": 3,
+        "passed_trials": 3,
+        "pass_rate": 1.0,
+        "average_score": 100,
+        "unstable": false
+      },
+      {
+        "name": "rust-validated-port",
+        "language": "rust",
+        "trials": 3,
+        "passed_trials": 3,
+        "pass_rate": 1.0,
+        "average_score": 100,
+        "unstable": false
+      },
+      {
+        "name": "typescript-safe-chunking",
+        "language": "typescript",
+        "trials": 3,
+        "passed_trials": 2,
+        "pass_rate": 0.6667,
+        "average_score": 75,
+        "unstable": true
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "python-order-preserving-dedupe",
+      "language": "python",
+      "trial": 1,
+      "profile": "optimized",
+      "agent_state": "completed_verified",
+      "changed_files": [
+        "dedupe.py"
+      ],
+      "unexpected_changes": [],
+      "tool_calls": 12,
+      "usage_complete": true,
+      "latency_seconds": 92.235,
+      "verification_flaky": false,
+      "baseline_failed": true,
+      "reported_tokens": 49136,
+      "verification_passed": true
+    },
+    {
+      "name": "python-order-preserving-dedupe",
+      "language": "python",
+      "trial": 2,
+      "profile": "optimized",
+      "agent_state": "completed_verified",
+      "changed_files": [
+        "dedupe.py"
+      ],
+      "unexpected_changes": [],
+      "tool_calls": 10,
+      "usage_complete": true,
+      "latency_seconds": 47.381,
+      "verification_flaky": false,
+      "baseline_failed": true,
+      "reported_tokens": 32755,
+      "verification_passed": true
+    },
+    {
+      "name": "python-order-preserving-dedupe",
+      "language": "python",
+      "trial": 3,
+      "profile": "optimized",
+      "agent_state": "completed_verified",
+      "changed_files": [
+        "dedupe.py"
+      ],
+      "unexpected_changes": [],
+      "tool_calls": 7,
+      "usage_complete": true,
+      "latency_seconds": 25.997,
+      "verification_flaky": false,
+      "baseline_failed": true,
+      "reported_tokens": 21497,
+      "verification_passed": true
+    },
+    {
+      "name": "typescript-safe-chunking",
+      "language": "typescript",
+      "trial": 1,
+      "profile": "optimized",
+      "agent_state": "completed_verified",
+      "changed_files": [
+        "chunk.mjs"
+      ],
+      "unexpected_changes": [],
+      "tool_calls": 13,
+      "usage_complete": true,
+      "latency_seconds": 212.868,
+      "verification_flaky": false,
+      "baseline_failed": true,
+      "reported_tokens": 57925,
+      "verification_passed": true
+    },
+    {
+      "name": "typescript-safe-chunking",
+      "language": "typescript",
+      "trial": 2,
+      "profile": "optimized",
+      "agent_state": "blocked",
+      "changed_files": [
+        "chunk.mjs"
+      ],
+      "unexpected_changes": [],
+      "tool_calls": 23,
+      "usage_complete": true,
+      "latency_seconds": 189.762,
+      "verification_flaky": false,
+      "baseline_failed": true,
+      "reported_tokens": 92778,
+      "verification_passed": true
+    },
+    {
+      "name": "typescript-safe-chunking",
+      "language": "typescript",
+      "trial": 3,
+      "profile": "optimized",
+      "agent_state": "completed_verified",
+      "changed_files": [
+        "chunk.mjs"
+      ],
+      "unexpected_changes": [],
+      "tool_calls": 14,
+      "usage_complete": true,
+      "latency_seconds": 228.328,
+      "verification_flaky": false,
+      "baseline_failed": true,
+      "reported_tokens": 54789,
+      "verification_passed": true
+    },
+    {
+      "name": "go-normalize-tags",
+      "language": "go",
+      "trial": 1,
+      "profile": "optimized",
+      "agent_state": "completed_verified",
+      "changed_files": [
+        "tags.go"
+      ],
+      "unexpected_changes": [],
+      "tool_calls": 8,
+      "usage_complete": true,
+      "latency_seconds": 27.795,
+      "verification_flaky": false,
+      "baseline_failed": true,
+      "reported_tokens": 22738,
+      "verification_passed": true
+    },
+    {
+      "name": "go-normalize-tags",
+      "language": "go",
+      "trial": 2,
+      "profile": "optimized",
+      "agent_state": "completed_verified",
+      "changed_files": [
+        "tags.go"
+      ],
+      "unexpected_changes": [],
+      "tool_calls": 7,
+      "usage_complete": true,
+      "latency_seconds": 44.813,
+      "verification_flaky": false,
+      "baseline_failed": true,
+      "reported_tokens": 22742,
+      "verification_passed": true
+    },
+    {
+      "name": "go-normalize-tags",
+      "language": "go",
+      "trial": 3,
+      "profile": "optimized",
+      "agent_state": "completed_verified",
+      "changed_files": [
+        "tags.go"
+      ],
+      "unexpected_changes": [],
+      "tool_calls": 9,
+      "usage_complete": true,
+      "latency_seconds": 38.287,
+      "verification_flaky": false,
+      "baseline_failed": true,
+      "reported_tokens": 32030,
+      "verification_passed": true
+    },
+    {
+      "name": "rust-validated-port",
+      "language": "rust",
+      "trial": 1,
+      "profile": "optimized",
+      "agent_state": "completed_verified",
+      "changed_files": [
+        "src/lib.rs"
+      ],
+      "unexpected_changes": [],
+      "tool_calls": 8,
+      "usage_complete": true,
+      "latency_seconds": 40.951,
+      "verification_flaky": false,
+      "baseline_failed": true,
+      "reported_tokens": 30601,
+      "verification_passed": true
+    },
+    {
+      "name": "rust-validated-port",
+      "language": "rust",
+      "trial": 2,
+      "profile": "optimized",
+      "agent_state": "completed_verified",
+      "changed_files": [
+        "src/lib.rs"
+      ],
+      "unexpected_changes": [],
+      "tool_calls": 8,
+      "usage_complete": true,
+      "latency_seconds": 82.594,
+      "verification_flaky": false,
+      "baseline_failed": true,
+      "reported_tokens": 31322,
+      "verification_passed": true
+    },
+    {
+      "name": "rust-validated-port",
+      "language": "rust",
+      "trial": 3,
+      "profile": "optimized",
+      "agent_state": "completed_verified",
+      "changed_files": [
+        "src/lib.rs"
+      ],
+      "unexpected_changes": [],
+      "tool_calls": 9,
+      "usage_complete": true,
+      "latency_seconds": 44.545,
+      "verification_flaky": false,
+      "baseline_failed": true,
+      "reported_tokens": 34808,
+      "verification_passed": true
+    },
+    {
+      "name": "python-layered-settings",
+      "language": "python",
+      "trial": 1,
+      "profile": "optimized",
+      "agent_state": "completed_verified",
+      "changed_files": [
+        "settings/coerce.py",
+        "settings/loader.py"
+      ],
+      "unexpected_changes": [],
+      "tool_calls": 13,
+      "usage_complete": true,
+      "latency_seconds": 165.681,
+      "verification_flaky": false,
+      "baseline_failed": true,
+      "reported_tokens": 43902,
+      "verification_passed": true
+    },
+    {
+      "name": "python-layered-settings",
+      "language": "python",
+      "trial": 2,
+      "profile": "optimized",
+      "agent_state": "blocked",
+      "changed_files": [
+        "settings/coerce.py",
+        "settings/loader.py"
+      ],
+      "unexpected_changes": [],
+      "tool_calls": 19,
+      "usage_complete": false,
+      "latency_seconds": 485.663,
+      "verification_flaky": false,
+      "baseline_failed": true,
+      "reported_tokens": 84879,
+      "verification_passed": true
+    },
+    {
+      "name": "python-layered-settings",
+      "language": "python",
+      "trial": 3,
+      "profile": "optimized",
+      "agent_state": "blocked",
+      "changed_files": [
+        "settings/coerce.py",
+        "settings/loader.py"
+      ],
+      "unexpected_changes": [],
+      "tool_calls": 20,
+      "usage_complete": true,
+      "latency_seconds": 362.349,
+      "verification_flaky": false,
+      "baseline_failed": true,
+      "reported_tokens": 92659,
+      "verification_passed": true
+    }
+  ],
+  "source_digest": "e693a6573a66f8a21f5e360e42ac74be5755718174bc598541a2024161927e80",
+  "limits": {
+    "steps": 25,
+    "tool_calls": 50,
+    "tokens": 100000
+  },
+  "dependencies": {
+    "apsara-agentic": "0.1.0a2",
+    "litellm": "1.104.0",
+    "openai": "2.54.0",
+    "mcp": "2.3.0",
+    "httpx2": "2.13.1",
+    "httpcore2": "2.13.1",
+    "PyJWT": "2.15.1",
+    "urllib3": "2.8.0"
+  }
+}

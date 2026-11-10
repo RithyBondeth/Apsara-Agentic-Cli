@@ -104,11 +104,20 @@ class McpServerConfig:
         """Stable text describing what would be executed, for the trust store."""
         return json.dumps(
             {
+                "name": self.name,
                 "command": self.command,
                 "args": self.args,
-                "env": sorted(self.env.keys()),
+                # Values matter here: PYTHONPATH, NODE_OPTIONS, and similar
+                # variables can change which code a previously approved
+                # command executes.  The resulting source is hashed before it
+                # reaches the trust store; it is never displayed or persisted
+                # in plaintext.
+                "env": self.env,
                 "cwd": self.cwd,
                 "url": self.url,
+                "headers": self.headers,
+                "enabled": self.enabled,
+                "timeout": self.timeout,
             },
             sort_keys=True,
         )
@@ -299,7 +308,18 @@ class McpManager:
         assert self._stack is not None
 
         if config.url:
-            client = Client(config.url)
+            if config.headers:
+                from mcp.client.streamable_http import streamable_http_client
+                from mcp.shared._httpx_utils import create_mcp_http_client
+
+                http_client = await self._stack.enter_async_context(
+                    create_mcp_http_client(headers=config.headers)
+                )
+                client = Client(
+                    streamable_http_client(config.url, http_client=http_client)
+                )
+            else:
+                client = Client(config.url)
         else:
             params = StdioServerParameters(
                 command=config.command or "",

@@ -3,6 +3,9 @@
 Apsara ships as the `apsara-agentic` Python package and is installed with
 `pipx`. There is no npm launcher to coordinate or maintain.
 
+Alpha builds use PEP 440 prerelease versions such as `0.1.0a1`; reserve
+`0.1.0` for the final release.
+
 ## 0. Pre-flight
 
 ```bash
@@ -69,7 +72,7 @@ Create a GitHub release from the tag. Attach the wheel, source archive, and
 SHA-256 checksums. Then verify the public install path:
 
 ```bash
-pipx install apsara-agentic
+pipx install apsara-agentic==<version>
 apsara --version
 apsara doctor --no-live
 ```
@@ -85,9 +88,9 @@ version.
 4. Fix and publish a higher patch version.
 5. Un-yank only if the original files are proven safe and compatible.
 
-Rollback immediately if installation fails, credentials are exposed, workspace
-boundaries can be crossed, background processes survive shutdown, or the live
-provider probe fails consistently.
+Rollback immediately if installation fails, credentials are exposed, a built-in
+file tool crosses the workspace boundary, background processes survive shutdown,
+or the live provider probe fails consistently.
 
 ## Notes
 
