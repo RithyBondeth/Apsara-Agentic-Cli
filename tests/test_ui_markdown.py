@@ -441,3 +441,19 @@ def test_restored_history_shows_conversation_but_hides_tool_internals():
     assert "Fixed" in output and "The bug is resolved." in output
     assert "I will inspect it" not in output
     assert "secret tool output" not in output
+
+def test_expired_promotion_usage_is_not_reported_as_free(monkeypatch):
+    monkeypatch.setattr("apsara_cli.engine.pricing._promotion_is_current", lambda _verified: False)
+    monkeypatch.setattr("apsara_cli.engine.pricing._model_map", lambda: ({}, "bundled LiteLLM pricing"))
+    ui = ConsoleUI(use_color=False, typing_delay=0)
+    ui.usage({
+        "prompt_tokens": 100,
+        "completion_tokens": 50,
+        "total_tokens": 150,
+        "apsara_model": "opencode/big-pickle",
+    })
+
+    assert ui.calculate_session_cost() is None
+    assert ui.session_cost_label() == "provider billed"
+    assert ui._session_total_tokens == 150
+

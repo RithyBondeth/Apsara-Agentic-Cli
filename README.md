@@ -11,6 +11,24 @@
 
 </div>
 
+<!-- product-images:start -->
+
+## Product preview
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/RithyBondeth/Apsara-Agentic-Cli/46017bbadda62667e2cab2bf9e821b0582664ff4/docs/product-images/hero.png" alt="Apsara Agentic — A local coding agent with your model key and your approval." width="100%">
+</p>
+
+<table>
+<tr>
+  <td width="33%"><img src="https://raw.githubusercontent.com/RithyBondeth/Apsara-Agentic-Cli/46017bbadda62667e2cab2bf9e821b0582664ff4/docs/product-images/feature-01.png" alt="Meet Makor. Stay in the terminal. — A full-screen coding workspace with a transcript, details, and a pixel-art Makara." width="100%"></td>
+  <td width="33%"><img src="https://raw.githubusercontent.com/RithyBondeth/Apsara-Agentic-Cli/46017bbadda62667e2cab2bf9e821b0582664ff4/docs/product-images/feature-02.png" alt="See the diff. Then decide. — File changes are approval-gated and create recoverable checkpoints." width="100%"></td>
+  <td width="33%"><img src="https://raw.githubusercontent.com/RithyBondeth/Apsara-Agentic-Cli/46017bbadda62667e2cab2bf9e821b0582664ff4/docs/product-images/feature-03.png" alt="Verification is part of the job. — The agent detects project checks and requires a passing full check before verified completion." width="100%"></td>
+</tr>
+</table>
+
+<!-- product-images:end -->
+
 ---
 
 ## Overview
@@ -34,15 +52,15 @@ Apsara Agentic is a terminal coding agent. Its persona is **Makor**, shown as a 
 
 ## Tech Stack
 
-| Area | Technology |
-| --- | --- |
-| Language | Python 3.10 – 3.14 |
-| Model routing | LiteLLM, OpenAI SDK (OpenCode Zen, Ollama, and other providers) |
-| Tool protocol | Model Context Protocol (`mcp`) |
-| Terminal UI | Rich, prompt_toolkit, Pygments |
-| Configuration | pydantic-settings, python-dotenv, TOML |
-| Code intelligence | Python AST, optional Tree-sitter language pack |
-| Testing | Pytest, GitHub Actions CI |
+| Area              | Technology                                                      |
+| ----------------- | --------------------------------------------------------------- |
+| Language          | Python 3.10 – 3.14                                              |
+| Model routing     | LiteLLM, OpenAI SDK (OpenCode Zen, Ollama, and other providers) |
+| Tool protocol     | Model Context Protocol (`mcp`)                                  |
+| Terminal UI       | Rich, prompt_toolkit, Pygments                                  |
+| Configuration     | pydantic-settings, python-dotenv, TOML                          |
+| Code intelligence | Python AST, optional Tree-sitter language pack                  |
+| Testing           | Pytest, GitHub Actions CI                                       |
 
 ## Getting Started
 
@@ -82,17 +100,17 @@ On the first request Apsara asks for your provider key inline. You can keep it f
 
 ## Usage
 
-| Command | Description |
-| --- | --- |
-| `apsara` | Open the full-screen interface |
-| `apsara --classic` | Use scrolling terminal chat |
-| `apsara run "<instruction>"` | Run a one-shot instruction, then exit |
-| `apsara init` | Set up `.apsara/` in the current project |
-| `apsara sessions` | List saved sessions for a workspace |
-| `apsara mcp` | List configured MCP servers and verify they connect |
-| `apsara trust` | Review or revoke approvals for workspace-defined code |
-| `apsara doctor [--live]` | Check environment, config, tools, credentials, and model access |
-| `apsara eval suite.json` | Score recorded runs against regression expectations |
+| Command                      | Description                                                     |
+| ---------------------------- | --------------------------------------------------------------- |
+| `apsara`                     | Open the full-screen interface                                  |
+| `apsara --classic`           | Use scrolling terminal chat                                     |
+| `apsara run "<instruction>"` | Run a one-shot instruction, then exit                           |
+| `apsara init`                | Set up `.apsara/` in the current project                        |
+| `apsara sessions`            | List saved sessions for a workspace                             |
+| `apsara mcp`                 | List configured MCP servers and verify they connect             |
+| `apsara trust`               | Review or revoke approvals for workspace-defined code           |
+| `apsara doctor [--live]`     | Check environment, config, tools, credentials, and model access |
+| `apsara eval suite.json`     | Score recorded runs against regression expectations             |
 
 Useful flags: `--model`, `--workspace`, `--read-only`, `--dry-run`, `--continue`, `--session <name>`, `--allow-bash --allowed-commands @verify,git`.
 
@@ -133,11 +151,11 @@ Apsara-Agentic-Cli/
 
 ## Documentation
 
-- [Agent runtime](docs/AGENT_RUNTIME.md)
-- [Skills and context management](docs/SKILLS_AND_CONTEXT.md)
-- [Code intelligence](docs/CODE_INTELLIGENCE.md)
-- [Evaluation strategy](docs/EVALUATION_STRATEGY.md)
-- [Tester quickstart](TESTER_QUICKSTART.md) · [Running the project](RUN_PROJECT.md) · [Releasing](RELEASING.md)
+- [Agent runtime](https://github.com/RithyBondeth/Apsara-Agentic-Cli/blob/main/docs/AGENT_RUNTIME.md)
+- [Skills and context management](https://github.com/RithyBondeth/Apsara-Agentic-Cli/blob/main/docs/SKILLS_AND_CONTEXT.md)
+- [Code intelligence](https://github.com/RithyBondeth/Apsara-Agentic-Cli/blob/main/docs/CODE_INTELLIGENCE.md)
+- [Evaluation strategy](https://github.com/RithyBondeth/Apsara-Agentic-Cli/blob/main/docs/EVALUATION_STRATEGY.md)
+- [Tester quickstart](https://github.com/RithyBondeth/Apsara-Agentic-Cli/blob/main/TESTER_QUICKSTART.md) · [Running the project](https://github.com/RithyBondeth/Apsara-Agentic-Cli/blob/main/RUN_PROJECT.md) · [Releasing](https://github.com/RithyBondeth/Apsara-Agentic-Cli/blob/main/RELEASING.md)
 
 ## Development
 
@@ -160,4 +178,4 @@ python -m pytest
 
 ## License
 
-Distributed under the MIT License. See [`LICENSE`](LICENSE) for details.
+Distributed under the MIT License. See [`LICENSE`](https://github.com/RithyBondeth/Apsara-Agentic-Cli/blob/main/LICENSE) for details.
