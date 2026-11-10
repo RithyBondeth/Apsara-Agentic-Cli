@@ -16,14 +16,14 @@
 ## Product preview
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/RithyBondeth/Apsara-Agentic-Cli/46017bbadda62667e2cab2bf9e821b0582664ff4/docs/product-images/hero.png" alt="Apsara Agentic — A local coding agent with your model key and your approval." width="100%">
+  <img src="https://raw.githubusercontent.com/RithyBondeth/Apsara-Agentic-Cli/main/docs/product-images/hero.png" alt="Apsara Agentic — A local coding agent with your model key and your approval." width="100%">
 </p>
 
 <table>
 <tr>
-  <td width="33%"><img src="https://raw.githubusercontent.com/RithyBondeth/Apsara-Agentic-Cli/46017bbadda62667e2cab2bf9e821b0582664ff4/docs/product-images/feature-01.png" alt="Meet Makor. Stay in the terminal. — A full-screen coding workspace with a transcript, details, and a pixel-art Makara." width="100%"></td>
-  <td width="33%"><img src="https://raw.githubusercontent.com/RithyBondeth/Apsara-Agentic-Cli/46017bbadda62667e2cab2bf9e821b0582664ff4/docs/product-images/feature-02.png" alt="See the diff. Then decide. — File changes are approval-gated and create recoverable checkpoints." width="100%"></td>
-  <td width="33%"><img src="https://raw.githubusercontent.com/RithyBondeth/Apsara-Agentic-Cli/46017bbadda62667e2cab2bf9e821b0582664ff4/docs/product-images/feature-03.png" alt="Verification is part of the job. — The agent detects project checks and requires a passing full check before verified completion." width="100%"></td>
+  <td width="33%"><img src="https://raw.githubusercontent.com/RithyBondeth/Apsara-Agentic-Cli/main/docs/product-images/feature-01.png" alt="Meet Makor. Stay in the terminal. — A full-screen coding workspace with a transcript, details, and a pixel-art Makara." width="100%"></td>
+  <td width="33%"><img src="https://raw.githubusercontent.com/RithyBondeth/Apsara-Agentic-Cli/main/docs/product-images/feature-02.png" alt="See the diff. Then decide. — File changes are approval-gated and create recoverable checkpoints." width="100%"></td>
+  <td width="33%"><img src="https://raw.githubusercontent.com/RithyBondeth/Apsara-Agentic-Cli/main/docs/product-images/feature-03.png" alt="Verification is part of the job. — The agent detects project checks and requires a passing full check before verified completion." width="100%"></td>
 </tr>
 </table>
 
