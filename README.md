@@ -8,6 +8,24 @@ middle.
 > **Alpha.** The CLI is usable day to day, but interfaces may still change
 > between releases.
 
+<!-- product-images:start -->
+
+## Product preview
+
+<p align="center">
+  <img src="docs/product-images/hero.png" alt="Apsara Agentic — A local coding agent with your model key and your approval." width="100%">
+</p>
+
+<table>
+<tr>
+  <td width="33%"><img src="docs/product-images/feature-01.png" alt="Meet Makor. Stay in the terminal. — A full-screen coding workspace with a transcript, details, and a pixel-art Makara." width="100%"></td>
+  <td width="33%"><img src="docs/product-images/feature-02.png" alt="See the diff. Then decide. — File changes are approval-gated and create recoverable checkpoints." width="100%"></td>
+  <td width="33%"><img src="docs/product-images/feature-03.png" alt="Verification is part of the job. — The agent detects project checks and requires a passing full check before verified completion." width="100%"></td>
+</tr>
+</table>
+
+<!-- product-images:end -->
+
 ## Requirements
 
 - Python 3.10 or newer
@@ -59,18 +77,18 @@ apsara chat
 
 ## Commands
 
-| Command | What it does |
-| --- | --- |
-| `apsara chat` | Interactive session in the current workspace |
-| `apsara run "<instruction>"` | One-shot instruction, then exit |
-| `apsara init` | Set up `.apsara/` in this project and start chatting |
-| `apsara sessions` | List saved sessions for a workspace |
-| `apsara mcp` | List configured MCP servers and verify they connect |
-| `apsara trust` | Review or revoke approvals for this project's plugins and MCP servers |
-| `apsara doctor` | Check environment, config, tools, and credentials |
-| `apsara eval suite.json` | Score recorded runs against regression expectations |
-| `apsara login` / `logout` | Manage stored provider keys |
-| `apsara --version` | Print the installed version |
+| Command                      | What it does                                                          |
+| ---------------------------- | --------------------------------------------------------------------- |
+| `apsara chat`                | Interactive session in the current workspace                          |
+| `apsara run "<instruction>"` | One-shot instruction, then exit                                       |
+| `apsara init`                | Set up `.apsara/` in this project and start chatting                  |
+| `apsara sessions`            | List saved sessions for a workspace                                   |
+| `apsara mcp`                 | List configured MCP servers and verify they connect                   |
+| `apsara trust`               | Review or revoke approvals for this project's plugins and MCP servers |
+| `apsara doctor`              | Check environment, config, tools, and credentials                     |
+| `apsara eval suite.json`     | Score recorded runs against regression expectations                   |
+| `apsara login` / `logout`    | Manage stored provider keys                                           |
+| `apsara --version`           | Print the installed version                                           |
 
 Run `apsara <command> --help` for the full flag list.
 
@@ -361,7 +379,19 @@ Recorded runs make agent behavior reproducible without paying for another model
 call. An evaluation suite references run IDs and expected state/tools:
 
 ```json
-{"cases":[{"name":"edit smoke","run_id":"abc123","expect":{"state":"completed","tools":["edit_file"],"max_tool_calls":10}}]}
+{
+  "cases": [
+    {
+      "name": "edit smoke",
+      "run_id": "abc123",
+      "expect": {
+        "state": "completed",
+        "tools": ["edit_file"],
+        "max_tool_calls": 10
+      }
+    }
+  ]
+}
 ```
 
 Run it with `apsara eval suite.json --workspace .`. The command exits non-zero

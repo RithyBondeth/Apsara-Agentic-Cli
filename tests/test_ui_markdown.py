@@ -1,4 +1,5 @@
 from apsara_cli.shared.ui import ConsoleUI, describe_action
+from apsara_cli.engine import pricing
 from prompt_toolkit.formatted_text import fragment_list_to_text, to_formatted_text
 
 from apsara_cli.cli.tui import TuiConsoleUI, _approval_footer, _approval_text, _restore_history
@@ -85,7 +86,8 @@ def test_tui_user_turn_has_a_clear_role_label():
     assert "you" in output
 
 
-def test_big_pickle_usage_is_zero_cost_not_an_estimate(capsys):
+def test_big_pickle_usage_is_zero_cost_not_an_estimate(capsys, monkeypatch):
+    monkeypatch.setattr(pricing, "_promotion_is_current", lambda _verified: True)
     ui = ConsoleUI(use_color=False, typing_delay=0)
     ui.usage({
         "prompt_tokens": 800,
@@ -113,7 +115,8 @@ def test_unknown_model_usage_is_provider_billed_not_guessed(capsys):
     assert "$0.0100" not in output
 
 
-def test_aggregated_usage_costs_each_model_without_double_counting(capsys):
+def test_aggregated_usage_costs_each_model_without_double_counting(capsys, monkeypatch):
+    monkeypatch.setattr(pricing, "_promotion_is_current", lambda _verified: True)
     ui = ConsoleUI(use_color=False, typing_delay=0)
     ui.usage({
         "prompt_tokens": 150,
@@ -136,6 +139,23 @@ def test_aggregated_usage_costs_each_model_without_double_counting(capsys):
     assert ui._session_total_tokens == 200
     assert ui.calculate_session_cost() == 0.0
     capsys.readouterr()
+
+
+def test_expired_promotion_usage_is_not_reported_as_free(capsys, monkeypatch):
+    monkeypatch.setattr(pricing, "_promotion_is_current", lambda _verified: False)
+    monkeypatch.setattr(pricing, "_model_map", lambda: ({}, "bundled LiteLLM pricing"))
+    ui = ConsoleUI(use_color=False, typing_delay=0)
+    ui.usage({
+        "prompt_tokens": 100,
+        "completion_tokens": 50,
+        "total_tokens": 150,
+        "apsara_model": "opencode/big-pickle",
+    })
+
+    assert ui.calculate_session_cost() is None
+    output = capsys.readouterr().out
+    assert "provider billed" in output
+    assert "$0.0000" not in output
 
 
 def test_detailed_usage_and_rate_limits_are_rendered_and_restorable(capsys):
