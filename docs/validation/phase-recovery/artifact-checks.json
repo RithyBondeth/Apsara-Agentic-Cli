@@ -1,0 +1,21 @@
+{
+  "artifact_runtime_commit": "44a146d59767de4f5d5f04661cc9b3b918d50b0d",
+  "source_digest": "337ce2dde3a22ed84502d8074b3561c88dc04dfecf1eee97c88856d760390a53",
+  "version": "0.1.0a2",
+  "published": false,
+  "package_files": {
+    "apsara_agentic-0.1.0a2-py3-none-any.whl": "9bc72a8dbf8053f466416428f9303d5f3a0ceda742a99abfc8cba07ef863ed46",
+    "apsara_agentic-0.1.0a2.tar.gz": "5b100833bb4b3eeeaae7cfa98b3560166abfdcf544ef8e3adaaf387ccfcc52eb"
+  },
+  "checks": {
+    "wheel_and_sdist_metadata": "passed",
+    "wheel_runtime_hash_match": "passed",
+    "clean_venv_install": "passed",
+    "dependency_consistency": "passed",
+    "installed_cli_version_and_help": "passed",
+    "isolated_final_wheel_pipx_install_init_doctor_upgrade_uninstall": "passed"
+  },
+  "doctor_scope": "No live model call; missing unconfigured provider credentials expected",
+  "live_benchmark_commit": "32ed04c39ee820e8cef2c270f5ecdea3cc293e17",
+  "limitation": "Final fresh-review safety fix was offline tested, not included in live model matrix."
+}

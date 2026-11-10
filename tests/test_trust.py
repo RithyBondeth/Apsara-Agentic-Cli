@@ -103,7 +103,7 @@ def test_auto_approve_does_not_imply_trust(tmp_path):
     workspace = _workspace_with_plugin(tmp_path)
     with agent_runtime_context(
         workspace_root=workspace,
-        confirmation_callback=None,  # what --auto-approve installs
+        confirmation_callback=None,
     ):
         registry = get_tool_registry()
     assert "shout" not in registry
@@ -120,6 +120,37 @@ def test_console_ui_auto_approve_does_not_approve_trust(monkeypatch):
     assert ui.confirm_action(
         "trust_workspace_code", {"kind": "plugin", "display_path": ".apsara/tools/x.py"}
     ) is False
+
+
+def test_console_ui_auto_approve_does_not_approve_commands_or_external_mutations(monkeypatch):
+    from apsara_cli.shared.ui import ConsoleUI
+
+    ui = ConsoleUI(use_color=False, auto_approve=True)
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+
+    assert ui.confirm_action("run_bash_command", {"command": "pytest"}) is False
+    assert ui.confirm_action("start_process", {"command": "npm test"}) is False
+    assert ui.confirm_action("mcp_tool_call", {"tool": "mcp__x__create"}) is False
+    assert ui.confirm_action("future_external_action", {}) is False
+    assert ui.confirm_action("write_to_file", {"path": "a.txt"}) is True
+
+
+def test_explicit_command_approval_cannot_enable_always_allow(monkeypatch):
+    from apsara_cli.shared.ui import ConsoleUI
+
+    ui = ConsoleUI(use_color=False, auto_approve=False)
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    seen = {}
+
+    def choose(**options):
+        seen.update(options)
+        return "approve"
+
+    monkeypatch.setattr(ui, "prompt_confirmation_choice", choose)
+
+    assert ui.confirm_action("run_bash_command", {"command": "pytest"}) is True
+    assert seen["allow_always"] is False
+    assert ui.approve_all is False
 
 
 def test_approving_a_plugin_does_not_silence_write_prompts(monkeypatch):

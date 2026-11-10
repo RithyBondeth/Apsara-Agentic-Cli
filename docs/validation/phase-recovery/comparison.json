@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "sample_counts": {
+    "optimized": 6,
+    "reference": 6
+  },
+  "pass_rate": {
+    "optimized": 0.0,
+    "reference": 0.1667
+  },
+  "latency_seconds": {
+    "optimized": {
+      "value": 88.379,
+      "variance": 2790.074,
+      "sample_count": 6,
+      "status": "measured"
+    },
+    "reference": {
+      "value": 65.419,
+      "variance": 2340.301,
+      "sample_count": 6,
+      "status": "measured"
+    }
+  },
+  "total_tokens": {
+    "optimized": {
+      "value": 62863.5,
+      "variance": 76837514.583,
+      "sample_count": 6,
+      "status": "measured"
+    },
+    "reference": {
+      "value": 55536.667,
+      "variance": 243119344.556,
+      "sample_count": 6,
+      "status": "measured"
+    }
+  },
+  "unknown_usage_trials": {
+    "optimized": 0,
+    "reference": 0
+  },
+  "outcomes": {
+    "optimized": {
+      "verified_success_rate": 1.0,
+      "false_completion_trials": 0,
+      "unexpected_edit_trials": 0
+    },
+    "reference": {
+      "verified_success_rate": 0.5,
+      "false_completion_trials": 0,
+      "unexpected_edit_trials": 0
+    }
+  },
+  "successful_work": {
+    "optimized": {
+      "completed_trials": 0,
+      "measured_completed_trials": 0,
+      "total_tokens": {
+        "value": null,
+        "sample_count": 0,
+        "status": "unknown"
+      },
+      "latency_seconds": {
+        "value": null,
+        "sample_count": 0,
+        "status": "unknown"
+      },
+      "all_trial_tokens_per_completion": null
+    },
+    "reference": {
+      "completed_trials": 1,
+      "measured_completed_trials": 1,
+      "total_tokens": {
+        "value": 87892,
+        "variance": 0,
+        "sample_count": 1,
+        "status": "measured"
+      },
+      "latency_seconds": {
+        "value": 171.275,
+        "variance": 0.0,
+        "sample_count": 1,
+        "status": "measured"
+      },
+      "all_trial_tokens_per_completion": 333220.0
+    }
+  },
+  "matched_successful_work": {
+    "sample_count": 0,
+    "pairs": [],
+    "optimized_tokens": {
+      "value": null,
+      "sample_count": 0,
+      "status": "unknown"
+    },
+    "reference_tokens": {
+      "value": null,
+      "sample_count": 0,
+      "status": "unknown"
+    },
+    "observed_savings_percent": null,
+    "status": "insufficient_repeated_samples",
+    "scope": "Successful, constrained, independently verified repairs with complete usage; matched by case and trial. Not a general causal claim."
+  },
+  "quality_claim": "pass rates are reported; no quality improvement is claimed without comparable measured samples"
+}

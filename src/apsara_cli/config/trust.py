@@ -1,10 +1,9 @@
 """Approval store for workspace-supplied code.
 
-Apsara loads two kinds of code that come from the *workspace* rather than from
-the user: local tool plugins (`.apsara/tools/*.py`, imported and executed) and
-MCP server definitions (`.apsara/config.toml`, launched as subprocesses). Both
-run with the user's privileges, so merely opening a cloned repository must not
-be enough to execute them.
+Apsara can execute several definitions that come from the *workspace* rather
+than from the user: local tool plugins, MCP servers, verification commands, and
+lifecycle hooks. They run with the user's privileges, so merely opening a
+cloned repository must not be enough to execute them.
 
 Approvals are recorded per workspace and keyed by a digest of the code, so an
 approved file that later changes is re-prompted rather than silently trusted.

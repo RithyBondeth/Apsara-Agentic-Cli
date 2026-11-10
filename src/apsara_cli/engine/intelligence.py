@@ -300,10 +300,12 @@ def capabilities() -> dict[str, object]:
         tree_sitter = True
     except ImportError:
         tree_sitter = False
+    from apsara_cli.engine.lsp import capabilities as lsp_capabilities
     return {
         "python_ast": True,
         "tree_sitter": tree_sitter,
         "project_checkers": [name for name in ("pyright", "tsc", "go", "cargo") if shutil.which(name)],
+        "lsp": lsp_capabilities(),
     }
 
 

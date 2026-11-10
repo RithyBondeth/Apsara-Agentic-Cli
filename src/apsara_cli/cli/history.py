@@ -32,11 +32,10 @@ def model_context_window(model: str) -> Optional[int]:
     models users can route to but that Apsara doesn't ship metadata for.
     """
     try:
-        from apsara_cli.engine.models import lookup_model
-
-        entry = lookup_model(model)
-        if entry is not None and entry.context_window:
-            return int(entry.context_window)
+        from apsara_cli.engine.model_capabilities import model_capabilities
+        capabilities = model_capabilities(model)
+        if capabilities.context_window:
+            return int(capabilities.context_window)
     except Exception:
         pass
 
@@ -63,11 +62,11 @@ def input_token_budget(model: str) -> int:
     """How many tokens of conversation we're willing to send for `model`."""
     window = model_context_window(model)
     if window:
-        from apsara_cli.engine.llm import DEFAULT_MAX_COMPLETION_TOKENS
+        from apsara_cli.engine.model_capabilities import completion_limit
 
-        safe_ceiling = int(window * WINDOW_FRACTION) - DEFAULT_MAX_COMPLETION_TOKENS
+        safe_ceiling = int(window * WINDOW_FRACTION) - completion_limit(model)
         safe_ceiling = min(safe_ceiling, MAX_INPUT_TOKEN_BUDGET)
-        safe_ceiling = max(MIN_INPUT_TOKEN_BUDGET, safe_ceiling)
+        safe_ceiling = max(1, safe_ceiling)
     else:
         # Unknown models may still be intentionally routed through LiteLLM, but
         # an override must never remove Apsara's global request ceiling.
@@ -196,13 +195,37 @@ def update_history_from_event(history: list[dict[str, Any]], event: dict[str, An
         })
     elif event_type == "tool_result":
         history.append({
-            "role": "tool",
-            "content": event.get("result"),
-            "tool_call_id": event.get("tool_call_id"),
-            "name": event.get("name", ""),
+            "role": "tool", "content": event.get("result"),
+            "tool_call_id": event.get("tool_call_id"), "name": event.get("name", ""),
         })
     elif event_type in {"final_answer", "response_end"}:
-        history.append({
-            "role": "assistant",
-            "content": event.get("content"),
-        })
+        history.append({"role": "assistant", "content": event.get("content")})
+
+
+def recover_interrupted_history(history: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Keep complete tool exchanges and remove unresolved dispatches on resume."""
+    recovered: list[dict[str, Any]] = []
+    index = 0
+    while index < len(history):
+        message = history[index]
+        index += 1
+        if message.get("role") == "assistant" and message.get("tool_calls"):
+            expected = {call.get("id") for call in message["tool_calls"]}
+            results = []
+            while index < len(history) and history[index].get("role") == "tool":
+                results.append(history[index])
+                index += 1
+            if (None not in expected and len(expected) == len(message["tool_calls"])
+                    and len(results) == len(expected)
+                    and expected == {result.get("tool_call_id") for result in results}):
+                recovered.extend([message, *results])
+            else:
+                recovered.append({"role": "assistant", "content": "Tool exchange interrupted. Inspect the run report and current workspace before continuing; verification may be stale."})
+                for result in results:
+                    recovered.append({"role": "assistant", "content": (
+                        f"Observed result before interruption ({result.get('name') or result.get('tool_call_id')}):\n"
+                        + str(result.get("content") or "")[:6000]
+                    )})
+        elif message.get("role") != "tool":
+            recovered.append(message)
+    return recovered

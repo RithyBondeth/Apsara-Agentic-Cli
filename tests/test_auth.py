@@ -61,13 +61,86 @@ def test_provider_helpers_consistent_with_registry():
 def test_big_pickle_alias_and_litellm_routing(monkeypatch):
     monkeypatch.setenv("OPENCODE_API_KEY", "zen-test-key")
 
-    assert models.resolve_model_id("pickle") == models.DEFAULT_MODEL
-    model_id, options = models.resolve_litellm_request(models.DEFAULT_MODEL)
+    assert models.resolve_model_id("pickle") == "opencode/big-pickle"
+    model_id, options = models.resolve_litellm_request("pickle")
     assert model_id == "openai/big-pickle"
     assert options == {
         "api_base": models.OPENCODE_API_BASE,
         "api_key": "zen-test-key",
     }
+
+
+def test_default_is_selectable_and_restricted_free_model_is_not():
+    assert models.model_availability(models.lookup_model(models.DEFAULT_MODEL)) == (True, "")
+    available, reason = models.model_availability(models.lookup_model("pickle"))
+    assert available is False
+    assert "OpenCode client" in reason
+    assert models.default_model_for_provider("opencode") != "opencode/big-pickle"
+
+
+def test_other_zen_chat_model_uses_opencode_endpoint_and_key(monkeypatch):
+    monkeypatch.setenv("OPENCODE_API_KEY", "zen-test-key")
+    monkeypatch.setenv("OPENAI_API_KEY", "other-provider-key")
+    monkeypatch.setenv("OPENCODE_API_BASE", "https://zen.example/v1")
+    model_id, options = models.resolve_litellm_request("opencode/minimax-m2.5")
+    assert model_id == "openai/minimax-m2.5"
+    assert options == {"api_base": "https://zen.example/v1", "api_key": "zen-test-key"}
+    assert models.resolve_litellm_request("gpt-4o") == ("gpt-4o", {})
+
+
+def test_free_testing_model_routes_without_paid_fallback(monkeypatch):
+    from apsara_cli.engine.executor import _model_candidates
+    monkeypatch.setenv("OPENCODE_API_KEY", "zen-test-key")
+    monkeypatch.setenv("APSARA_FALLBACK_MODELS", "opencode/minimax-m2.5,gpt-4o")
+    model = models.resolve_model_id("bunny")
+    assert model == "opencode/space-bunny-free"
+    assert models.lookup_model(model).tier == "free"
+    assert models.resolve_litellm_request(model) == (
+        "openai/space-bunny-free",
+        {"api_base": os.environ.get("OPENCODE_API_BASE", models.OPENCODE_API_BASE), "api_key": "zen-test-key"},
+    )
+    assert _model_candidates(model) == [model]
+
+
+def test_zen_does_not_borrow_openai_credentials(monkeypatch):
+    monkeypatch.delenv("OPENCODE_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "other-provider-key")
+    monkeypatch.delenv("OPENCODE_API_BASE", raising=False)
+    _, options = models.resolve_litellm_request("opencode/minimax-m2.5")
+    assert options == {"api_base": models.OPENCODE_API_BASE}
+
+
+def test_login_restriction_is_rejected_and_environment_restored(monkeypatch):
+    import asyncio
+    import litellm
+    from apsara_cli.cli.auth_cli import _verify_key
+
+    monkeypatch.setenv("OPENCODE_API_KEY", "original")
+    async def restricted(**kwargs):
+        assert kwargs["api_key"] == "candidate"
+        raise RuntimeError("OpenCode's free tier can only be used from within OpenCode")
+    monkeypatch.setattr(litellm, "acompletion", restricted)
+    verdict, detail = asyncio.run(_verify_key("opencode/big-pickle", "OPENCODE_API_KEY", "candidate"))
+    assert verdict is False
+    assert "provider access restriction" in detail
+    assert os.environ["OPENCODE_API_KEY"] == "original"
+
+
+def test_login_does_not_save_key_when_paid_account_has_no_funds(temp_creds, monkeypatch):
+    import asyncio
+    import litellm
+    from apsara_cli.cli import auth_cli
+
+    monkeypatch.setattr(auth_cli, "_prompt_choice", lambda ui, providers: providers.index("opencode"))
+    monkeypatch.setattr(auth_cli, "default_model_for_provider", lambda provider: "opencode/minimax-m2.5")
+    monkeypatch.setattr(auth_cli.getpass, "getpass", lambda prompt: "candidate")
+    async def unfunded(**kwargs):
+        assert kwargs["model"] == "openai/minimax-m2.5"
+        raise RuntimeError("Upstream request failed: Insufficient account funds")
+    monkeypatch.setattr(litellm, "acompletion", unfunded)
+    assert asyncio.run(auth_cli.login()) == 1
+    assert auth.stored_providers() == []
+    assert "OPENCODE_API_KEY" not in os.environ
 
 
 # ── Credential store round-trips ──────────────────────────────────────────────

@@ -101,14 +101,32 @@ def parse_allowed_commands(raw_commands: Any) -> Optional[Set[str]]:
 
 def resolve_runtime_options(args: argparse.Namespace, config_defaults: Any) -> ResolvedOptions:
     from apsara_cli.engine.models import DEFAULT_MODEL, resolve_model_id as _resolve_mid
-    from apsara_cli.cli.auth import get_active_default_model
+    from apsara_cli.cli.session import latest_session_name, new_session_name
+
     workspace = resolve_value(args.workspace, config_defaults.workspace, ".")
-    # Precedence: --model flag > config default > active provider's default > Apsara default.
+    workspace_root = resolve_workspace(str(workspace))
+    # Precedence: --model flag > config default > Apsara's OpenCode Zen default.
+    # Stored credentials provide keys, not a hidden startup-model override.
     _raw_model = resolve_value(args.model, config_defaults.model, None)
     if _raw_model is None:
-        _raw_model = get_active_default_model() or DEFAULT_MODEL
+        _raw_model = DEFAULT_MODEL
     model = _resolve_mid(str(_raw_model))  # expand short aliases at startup
-    session = resolve_value(args.session, config_defaults.session, "default")
+
+    # Starting Apsara should mean starting a new conversation. Existing history
+    # is loaded only when the user explicitly names a session, asks to continue
+    # the latest one, or has deliberately pinned a session in config.
+    explicit_session = getattr(args, "session", None)
+    continue_session = bool(getattr(args, "continue_session", False))
+    configured_session = getattr(config_defaults, "session", None)
+    if explicit_session is not None:
+        session = str(explicit_session)
+    elif continue_session:
+        session = latest_session_name(workspace_root) or new_session_name()
+    elif configured_session is not None:
+        session = str(configured_session)
+    else:
+        session = new_session_name()
+
     stateless = bool(resolve_value(args.stateless, config_defaults.stateless, False))
     allow_bash = bool(resolve_value(args.allow_bash, config_defaults.allow_bash, False))
     allowed_commands = parse_allowed_commands(
@@ -126,7 +144,7 @@ def resolve_runtime_options(args: argparse.Namespace, config_defaults: Any) -> R
     read_only = bool(getattr(args, "read_only", False))
 
     return ResolvedOptions(
-        workspace_root=resolve_workspace(str(workspace)),
+        workspace_root=workspace_root,
         model=str(model),
         session=str(session),
         stateless=stateless,

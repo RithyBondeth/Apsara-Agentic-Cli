@@ -35,6 +35,8 @@ class CliUi:
     powered_by: Optional[str] = None
     welcome_animation: Optional[bool] = None
     welcome_frame_delay_ms: Optional[int] = None
+    mascot: Optional[bool] = None
+    mascot_animation: Optional[bool] = None
 
 
 @dataclass
@@ -294,6 +296,8 @@ def load_cli_config(
         welcome_frame_delay_ms=_optional_int(
             ui_raw.get("welcome_frame_delay_ms"), "ui.welcome_frame_delay_ms"
         ),
+        mascot=_optional_bool(ui_raw.get("mascot"), "ui.mascot"),
+        mascot_animation=_optional_bool(ui_raw.get("mascot_animation"), "ui.mascot_animation"),
     )
 
     theme_raw = ui_raw.get("theme", {})

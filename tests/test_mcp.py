@@ -8,6 +8,7 @@ import asyncio
 import os
 import sys
 import textwrap
+from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -220,6 +221,36 @@ def test_valid_stdio_config_passes():
     assert McpServerConfig(name="x", command=sys.executable, args=["-V"]).validate() is None
 
 
+def test_trust_digest_changes_when_execution_environment_changes():
+    original = McpServerConfig(
+        name="x",
+        command=sys.executable,
+        env={"PYTHONPATH": "safe"},
+    )
+    changed = McpServerConfig(
+        name="x",
+        command=sys.executable,
+        env={"PYTHONPATH": "attacker-controlled"},
+    )
+
+    assert original.trust_digest_source() != changed.trust_digest_source()
+
+
+def test_trust_digest_changes_when_http_headers_change():
+    original = McpServerConfig(
+        name="x",
+        url="https://mcp.example.com",
+        headers={"Authorization": "Bearer original"},
+    )
+    changed = McpServerConfig(
+        name="x",
+        url="https://mcp.example.com",
+        headers={"Authorization": "Bearer replacement"},
+    )
+
+    assert original.trust_digest_source() != changed.trust_digest_source()
+
+
 # ── TOML parsing ──────────────────────────────────────────────────────────────
 
 def _write_config(tmp_path: Path, body: str) -> Path:
@@ -266,6 +297,70 @@ def test_env_vars_are_expanded(tmp_path, monkeypatch):
     )
     config = load_cli_config(str(path))
     assert config.mcp_servers[0].headers["Authorization"] == "Bearer s3cret"
+
+
+def test_http_connection_uses_configured_headers(monkeypatch):
+    import mcp
+    from mcp.client import streamable_http
+    from mcp.shared import _httpx_utils
+
+    seen = {}
+
+    class FakeHttpClient:
+        async def __aenter__(self):
+            seen["http_entered"] = True
+            return self
+
+        async def __aexit__(self, *_exc_info):
+            seen["http_exited"] = True
+
+    class FakeClient:
+        def __init__(self, transport):
+            seen["client_transport"] = transport
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_exc_info):
+            seen["client_exited"] = True
+
+    def create_http_client(headers=None, **_kwargs):
+        seen["headers"] = headers
+        return FakeHttpClient()
+
+    def create_transport(url, *, http_client):
+        seen["url"] = url
+        seen["http_client"] = http_client
+        return "authenticated-transport"
+
+    monkeypatch.setattr(mcp, "Client", FakeClient)
+    monkeypatch.setattr(_httpx_utils, "create_mcp_http_client", create_http_client)
+    monkeypatch.setattr(streamable_http, "streamable_http_client", create_transport)
+
+    async def scenario():
+        manager = McpManager([])
+        manager._stack = AsyncExitStack()
+        await manager._stack.__aenter__()
+        client = await manager._open_client(
+            McpServerConfig(
+                name="remote",
+                url="https://mcp.example.com",
+                headers={"Authorization": "Bearer secret"},
+            )
+        )
+        await manager.aclose()
+        return client
+
+    client = _run(scenario())
+
+    assert isinstance(client, FakeClient)
+    assert seen["headers"] == {"Authorization": "Bearer secret"}
+    assert seen["url"] == "https://mcp.example.com"
+    assert seen["client_transport"] == "authenticated-transport"
+    assert seen["http_client"] is not None
+    assert seen["http_entered"] is True
+    assert seen["client_exited"] is True
+    assert seen["http_exited"] is True
 
 
 def test_disabled_servers_are_kept_but_flagged(tmp_path):

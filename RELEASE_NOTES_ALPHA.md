@@ -1,104 +1,75 @@
-# Apsara by Bondeth Alpha Release Notes
+# Apsara Agentic 0.1.0a2 — Alpha candidate
 
-Version: `0.1.0`
+Version: `0.1.0a2`
 
-Date: `2026-08-08`
+Status: prepared locally; no release tag, GitHub release, or PyPI publication.
 
-## Overview
+## Changes
 
-This alpha release introduces the first polished local CLI experience for Apsara by Bondeth.
+- Space Bunny Free is the default OpenCode model, with actionable access errors
+  and paid fallback disabled for the retained free-model validation.
+- The colorful terminal UI follows the OpenCode layout: centered welcome,
+  transcript cards, anchored composer, and optional sidebar. `--classic`
+  preserves scrolling terminal chat.
+- Current verification and review evidence guides the agent toward a final
+  answer when the requested work is finished. Later edits invalidate evidence.
+- Deterministic file reads, passing full checks, and approved critic results
+  can be reused within a turn when source and policy fingerprints match.
+  Explicit fresh checks execute again; external tools and shell commands do too.
+  Earlier exchanges compact sooner as the turn allowance shrinks, while
+  required context remains protected. Approvals for another project do not
+  invalidate this project's evidence.
+- `/budget`, the sidebar, and durable reports expose model steps, requested
+  tool calls, provider totals, estimates, and reused results. Local limits
+  preserve edits and block honestly when more work cannot fit.
+- Single fenced JSON critic verdicts are accepted; material findings still
+  require changes and missing review still blocks verified completion. Final
+  reviews receive the actual objective and current verification evidence;
+  agent-suggested extra cases are not accepted as additional requirements.
+  Model review may still make scope or correctness errors.
 
-The focus of this release is:
+- Phase allowances protect checking, review, and finishing within the same
+  overall turn limits. Unused exploration funds can support implementation.
+- Missing review verdicts and timeouts have bounded recovery; a failed fresh
+  review invalidates an older approval. Material findings still block completion.
+- Efficiency reports match successfully verified repairs and count failed
+  attempts in cost per completion. Incomplete usage stays explicitly unknown.
 
-- local coding assistant workflows
-- safer code-edit review
-- better terminal presentation
-- faster tester onboarding
+## Validation
 
-## Highlights
+Current live and artifact evidence is documented in
+`docs/PHASE_RECOVERY_VALIDATION_2026-10-04.md`. Only OpenCode's free model is included
+in live provider testing. Other provider adapters have offline coverage and
+remain uncertified for live coding; see `docs/PROVIDER_VALIDATION.md`.
 
-### Default Model
+556 local tests and all 18 runtime CI jobs passed on `44a146d`.
+Live repeats ran on preceding runtime `32ed04c`; the final fresh-review
+safety fix has regression coverage but was not included in that live matrix.
+The subsequent focused free-model repeat passed 4/6 Node/multi-file trials;
+pinned optimized/reference trials passed 0/6 and 1/6.
+See `docs/PHASE_RECOVERY_VALIDATION_2026-10-04.md` for actual stability gates,
+complete/incomplete usage, and successful-work comparisons. Earlier full core,
+recovery, and local MCP evidence is retained on its exact preceding runtimes.
+No other provider or language runtime is newly certified by this focused repeat.
 
-- OpenCode Zen's `opencode/big-pickle` is the default model
-- `apsara login` supports OpenCode Zen and stores its key locally
-- other LiteLLM-compatible models remain selectable with `--model`
+## Install the candidate
 
-### Branded CLI Experience
+```bash
+python3 -m pip install build
+python3 -m build
+pipx install ./dist/apsara_agentic-0.1.0a2-py3-none-any.whl
+apsara doctor --no-live
+apsara
+```
 
-- custom Apsara welcome screen
-- colorful terminal styling
-- branded identity with `Apsara by Bondeth`
-- loading animation while the agent is working
+## Alpha limits
 
-### Better Chat Experience
+The bundled tasks and injected regressions are limited samples, not a guarantee
+for arbitrary repositories. Review generated changes and the final verification
+report. Free-model availability depends on the provider. Turn token limits use
+conservative estimates and are not a provider billing cap. Executed project
+commands run with the user's permissions; isolated verification is not an OS
+sandbox. Live testing of paid providers is outside this candidate's scope.
 
-- cleaner assistant response formatting
-- hidden internal tool chatter by default
-- `/details` to inspect hidden activity on demand
-- local session history with trimming for oversized requests
-- typed run state, durable redacted journals, run reports, and evaluation suites
-- planning and verification gates for multi-step coding tasks
-
-### Safer Code Editing
-
-- approval prompts before file writes and command execution
-- diff preview before code changes are applied
-- `v` to inspect a fuller diff in the terminal
-- `e` to open the proposed patch in `$EDITOR` or `$VISUAL`
-- workspace-scoped parallel reads with context isolation
-- checkpoints and undo support for agent edits
-- process-group cleanup for background commands
-- nested interpreter validation so `python -m pip` cannot bypass the command allowlist
-
-### Local CLI Workflow
-
-- `init` command for project-first setup
-- `doctor` command for environment checks
-- `chat`, `run`, and `sessions` commands
-- automatic `.env` loading for local use
-- workspace-scoped tools and optional allowlisted bash execution
-- repository maps, symbol search, project memory, git tools, and MCP governance
-- background process management and bounded output capture
-- model fallback support and JSON plugin manifests
-
-### Tester Support
-
-- step-by-step run guide
-- alpha testing guide
-- tester quickstart
-
-## Recommended Test Areas
-
-Please focus alpha feedback on:
-
-- first-run setup
-- CLI readability and overall UX
-- response organization
-- code-edit approval flow
-- editor-based patch review
-- failure handling for missing keys, billing limits, and rate limits
-
-## Known Alpha Limitations
-
-- live model usage still depends on the tester's own API key, billing, and rate limits
-- OpenCode currently warns against sending confidential code to Big Pickle
-- this remains an alpha release; users should review proposed changes and keep Git backups
-
-## Suggested Launch Positioning
-
-Recommended label:
-
-`Apsara by Bondeth - Private Alpha`
-
-Recommended audience:
-
-- trusted developer friends
-- technical early adopters
-- small internal testing group
-
-## Related Docs
-
-- Tester quickstart: [TESTER_QUICKSTART.md](TESTER_QUICKSTART.md)
-- Alpha testing guide: [ALPHA_TESTING.md](ALPHA_TESTING.md)
-- Run guide: [RUN_PROJECT.md](RUN_PROJECT.md)
-- Main README: [README.md](README.md)
+The previous release notes and original validation claims are preserved in
+`docs/releases/0.1.0a1.md` as historical evidence.

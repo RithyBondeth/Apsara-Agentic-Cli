@@ -18,6 +18,11 @@ _SENSITIVE_KEY = re.compile(
 _SECRET_VALUE_PATTERNS = (
     re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+"),
     re.compile(r"\b(?:sk|pk|rk)-[A-Za-z0-9_-]{12,}\b"),
+    re.compile(r"\b(?:gsk_|AIza|gh[pousr]_)[A-Za-z0-9_-]{12,}\b"),
+    re.compile(
+        r"(?i)(\b(?:authorization|proxy-authorization|cookie|set-cookie)\b\s*[:=]\s*)"
+        r"[^\r\n]+"
+    ),
     re.compile(
         r"(?i)(\b[A-Z][A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)\b\s*[:=]\s*)"
         r"(?:[^\s,;]+|\"[^\"]*\"|'[^']*')"
@@ -30,38 +35,43 @@ _OMITTED_ARGUMENT_KEYS = {
 _MAX_JOURNAL_TEXT = 2_000
 
 
-def _redact_text(value: str) -> str:
+def redact_text(value: str, *, max_length: Optional[int] = _MAX_JOURNAL_TEXT) -> str:
+    """Remove common credential forms and optionally bound the result."""
     redacted = value
     for pattern in _SECRET_VALUE_PATTERNS:
         if pattern.groups:
             redacted = pattern.sub(lambda match: f"{match.group(1)}[REDACTED]", redacted)
         else:
             redacted = pattern.sub("[REDACTED]", redacted)
-    if len(redacted) > _MAX_JOURNAL_TEXT:
-        return redacted[:_MAX_JOURNAL_TEXT] + f"… [TRUNCATED {len(redacted) - _MAX_JOURNAL_TEXT} chars]"
+    if max_length is not None and len(redacted) > max_length:
+        return redacted[:max_length] + f"… [TRUNCATED {len(redacted) - max_length} chars]"
     return redacted
 
 
-def _summarize_text(value: str) -> str:
+def summarize_text(value: str) -> str:
+    """Describe a text payload without persisting its contents."""
     digest = hashlib.sha256(value.encode("utf-8", errors="replace")).hexdigest()[:12]
     return f"[OMITTED {len(value)} chars sha256:{digest}]"
 
 
-def _sanitize(value: Any, *, key: str = "") -> Any:
+def sanitize_value(value: Any, *, key: str = "") -> Any:
     """Return a JSON-safe journal value without credentials or source payloads."""
     if _SENSITIVE_KEY.search(key):
         return "[REDACTED]"
     if isinstance(value, dict):
-        return {str(item_key): _sanitize(item, key=str(item_key)) for item_key, item in value.items()}
+        return {
+            str(item_key): sanitize_value(item, key=str(item_key))
+            for item_key, item in value.items()
+        }
     if isinstance(value, (list, tuple)):
-        return [_sanitize(item) for item in value]
+        return [sanitize_value(item) for item in value]
     if isinstance(value, str):
         if key.lower() in _OMITTED_ARGUMENT_KEYS:
-            return _summarize_text(value)
-        return _redact_text(value)
+            return summarize_text(value)
+        return redact_text(value)
     if value is None or isinstance(value, (bool, int, float)):
         return value
-    return _redact_text(str(value))
+    return redact_text(str(value))
 
 
 class RunJournal:
@@ -84,11 +94,12 @@ class RunJournal:
 
     def _write_state(self) -> None:
         self.state_path.write_text(
-            json.dumps(_sanitize(self.run.as_dict()), ensure_ascii=False, indent=2), encoding="utf-8"
+            json.dumps(sanitize_value(self.run.as_dict()), ensure_ascii=False, indent=2),
+            encoding="utf-8",
         )
 
     def record(self, event_type: str, **data: Any) -> None:
-        event = _sanitize({"timestamp": time(), "type": event_type, **data})
+        event = sanitize_value({"timestamp": time(), "type": event_type, **data})
         try:
             with self._lock:
                 self.directory.mkdir(parents=True, exist_ok=True)
@@ -104,6 +115,8 @@ class RunJournal:
         if state in {
             AgentRunState.BLOCKED,
             AgentRunState.COMPLETED,
+            AgentRunState.COMPLETED_VERIFIED,
+            AgentRunState.COMPLETED_UNVERIFIED,
             AgentRunState.FAILED,
             AgentRunState.CANCELLED,
         }:
@@ -112,6 +125,8 @@ class RunJournal:
         if state in {
             AgentRunState.BLOCKED,
             AgentRunState.COMPLETED,
+            AgentRunState.COMPLETED_VERIFIED,
+            AgentRunState.COMPLETED_UNVERIFIED,
             AgentRunState.FAILED,
             AgentRunState.CANCELLED,
         }:
@@ -160,8 +175,8 @@ class RunJournal:
             risk=risk,
             result={
                 "ok": result.ok,
-                "content_summary": _summarize_text(result.content) if result.content else "",
-                "error": _redact_text(result.error) if result.error else None,
+                "content_summary": summarize_text(result.content) if result.content else "",
+                "error": redact_text(result.error) if result.error else None,
                 "metadata": result.metadata,
             },
         )

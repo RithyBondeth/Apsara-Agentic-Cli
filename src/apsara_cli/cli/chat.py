@@ -1,10 +1,9 @@
 from contextlib import asynccontextmanager
 from getpass import getpass
+from io import StringIO
 import json
 import os
-import shutil
 import sys
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional, TYPE_CHECKING
 
@@ -248,17 +247,18 @@ def mode_line_parts(options: "ResolvedOptions", current_model: str) -> tuple[str
     """(mode, model display name, provider) for the input-box mode line."""
     entry = lookup_model(current_model)
     model_name = entry.display_name if entry else current_model.split("/")[-1]
-    provider = entry.provider.capitalize() if entry else ""
+    provider = (
+        "OpenCode Zen" if entry and entry.provider == "opencode"
+        else entry.provider.capitalize() if entry else ""
+    )
     return turn_mode_word(options), model_name, provider
 
 
 def build_mode_line(ui: "ConsoleUI", options: "ResolvedOptions", current_model: str) -> str:
     """
-    OpenCode-style mode line rendered under the input:
-    'Build · Big Pickle' — mode accent-colored and model bold. Provider and
-    context details remain available in the optional details sidebar.
+    Mode, model and provider inside the composer, with subdued metadata.
     """
-    mode, model_name, _provider = mode_line_parts(options, current_model)
+    mode, model_name, provider = mode_line_parts(options, current_model)
     mode_color = {
         "Dry-run": "38;2;247;200;100",
         "Read-only": "38;2;240;170;90",
@@ -269,7 +269,31 @@ def build_mode_line(ui: "ConsoleUI", options: "ResolvedOptions", current_model: 
         ui.dim("·"),
         ui.style(model_name, "1", "38;2;225;230;242"),
     ]
+    if provider:
+        parts.append(ui.dim(provider))
     return " ".join(parts)
+
+
+def build_scrolling_composer(
+    ui: "ConsoleUI", options: "ResolvedOptions", current_model: str, columns: int
+) -> tuple[str, str, str]:
+    """Compact inline composer with Apsara's blue, violet and green accents."""
+    from rich.text import Text
+
+    width = max(1, min(columns - 4, 84))
+    pad = "  " if columns >= 5 else ""
+    border = ui.theme.border
+    continuation = pad + ui.style("▌", ui.theme.accent) + " "
+    prompt = "\n" + pad + ui.style("─" * width, border) + "\n" + continuation
+    mode = Text.from_ansi(build_mode_line(ui, options, current_model))
+    mode.truncate(max(1, width - 2), overflow="ellipsis")
+    rendered = StringIO()
+    from rich.console import Console
+    Console(file=rendered, force_terminal=ui.use_color,
+            color_system="truecolor" if ui.use_color else None, width=max(1, width - 2),
+            height=1, legacy_windows=False).print(mode, end="", soft_wrap=True)
+    footer = pad + ui.style("▌", "38;2;190;150;250") + " " + rendered.getvalue()
+    return prompt, footer, continuation
 
 
 def _load_stored_keys() -> None:
@@ -377,7 +401,9 @@ def build_model_rows(
             if entry.aliases:
                 aliases_hint = "  " + ui.dim("alias: " + ", ".join(entry.aliases[:3]))
 
-            if lifecycle == "retired":
+            if entry.access_restriction:
+                health_text = ui.style("[access restricted]", "38;2;235;110;100")
+            elif lifecycle == "retired":
                 health_text = ui.style("[retired]", "38;2;235;110;100")
             elif lifecycle in {"retiring", "deprecated"}:
                 health_text = ui.style(f"[{lifecycle}]", "38;2;247;200;100")
@@ -389,7 +415,7 @@ def build_model_rows(
                 f"{health_text}  {ui.dim(model_price_label(entry.model_id))}  {ctx_text}  {key_text}  "
                 f"{ui.dim(entry.model_id)}{aliases_hint}"
             )
-            provider_rows.append((line, entry.model_id if lifecycle != "retired" else None))
+            provider_rows.append((line, entry.model_id if model_availability(entry)[0] else None))
 
         if provider_rows:
             rows.append((ui.style(provider.upper(), "1", "38;2;190;200;220"), None))
@@ -404,6 +430,7 @@ _HELP_SECTIONS: list[tuple[str, list[tuple[str, str, str]]]] = [
         ("/history", "", "Show recent conversation turns"),
         ("/details", "", "Reveal the agent's internal steps from the last turn"),
         ("/clear", "", "Clear the in-memory conversation history"),
+        ("/mascot", "[on|off|still|animate]", "Show Makor or control mascot motion"),
     ]),
     ("Models & keys", [
         ("/model", "", "Show the current model"),
@@ -416,6 +443,7 @@ _HELP_SECTIONS: list[tuple[str, list[tuple[str, str, str]]]] = [
     ("Session", [
         ("/status", "", "Token usage, context health, session cost"),
         ("/usage", "", "Local token totals by model and saved session"),
+        ("/budget", "", "Current turn usage and model/tool/token limits"),
         ("/save", "", "Save the current session now"),
         ("/session", "", "Show session and workspace details"),
         ("/sessions", "", "List all saved sessions"),
@@ -436,7 +464,8 @@ _HELP_SECTIONS: list[tuple[str, list[tuple[str, str, str]]]] = [
     ]),
     ("Diagnostics", [
         ("/tools", "", "Show enabled tools with descriptions"),
-        ("/bug", "", "Save logs + session state for a bug report"),
+        ("/skills", "[name]", "List skills or preview a skill without a model call"),
+        ("/bug", "[--include-content]", "Save a privacy-safe diagnostic bundle"),
         ("/exit", "", "Quit the chat session"),
     ]),
 ]
@@ -492,8 +521,45 @@ def handle_chat_command(
         print_chat_help(ui)
         return True, current_model
 
+    if command_text == "/mascot" or command_text.startswith("/mascot "):
+        choice = command_text[len("/mascot"):].strip().lower()
+        if choice == "on":
+            ui.mascot.enabled = True
+        elif choice == "off":
+            ui.mascot.enabled = False
+        elif choice == "still":
+            ui.mascot.animation = False
+        elif choice == "animate":
+            ui.mascot.animation = not os.environ.get("CI") and os.environ.get("TERM") != "dumb"
+        elif choice:
+            ui.error("Usage: /mascot [on|off|still|animate]")
+            return True, current_model
+        ui.info(f"Makor is {'visible' if ui.mascot.enabled else 'hidden'} · "
+                f"{'animated' if ui.mascot.animation else 'still'}.")
+        ui._mascot_changed()
+        return True, current_model
+
     if command_text == "/details":
         ui.show_hidden_events()
+        return True, current_model
+
+    if command_text == "/skills" or command_text.startswith("/skills "):
+        from apsara_cli.engine.skills import discover_skills, read_skill_file
+        name = command_text[len("/skills"):].strip()
+        skills = discover_skills(options.workspace_root)
+        if not name:
+            ui.info("Available skills — ask Apsara to use a named skill for your task.")
+            ui.print_block("\n".join(f"{skill.name} [{skill.source}] — {skill.description}" for skill in skills)
+                           or "No skills found.")
+        else:
+            skill = next((item for item in skills if item.name == name), None)
+            if skill is None:
+                ui.error(f"Skill '{name}' was not found. Use /skills to list available names.")
+            else:
+                try:
+                    ui.print_block(read_skill_file(skill))
+                except (OSError, ValueError, UnicodeError) as exc:
+                    ui.error(f"Cannot read skill: {exc}")
         return True, current_model
 
     if command_text == "/diff":
@@ -513,6 +579,30 @@ def handle_chat_command(
         ui.print_block(format_usage_report(options.workspace_root, snapshot))
         return True, current_model
 
+    if command_text == "/budget":
+        from apsara_cli.engine.budget import TurnBudget
+        from apsara_cli.engine.executor import _max_steps
+        from apsara_cli.engine.runtime import latest_run
+        latest = latest_run(options.workspace_root) or {}
+        budget = ui._run_budget or latest.get("budget") or TurnBudget.from_environment(_max_steps()).as_dict()
+        ui.print_block(
+            f"Model steps: {budget['steps_used']}/{budget['step_limit']}\n"
+            f"Tool calls: {budget['tool_calls_used']}/{budget['tool_call_limit']}\n"
+            f"Provider-reported tokens: {budget['reported_usage']:,}\n"
+            f"Reserved estimated usage: {budget['estimated_usage']:,}\n"
+            f"Turn token limit: {budget['usage_limit']:,}\n"
+            f"Complete provider usage: {budget['usage_complete']}\n"
+            f"Reused results: {budget['reused_checks']}\n\n"
+            f"Current phase: {budget.get('phase', 'unknown')}\n"
+            f"Available in current phase: {budget.get('phase_available', 'unknown')}\n"
+            f"Phase allowances: {budget.get('phase_limits', {})}\n"
+            f"Phase usage (reported plus reserved): {budget.get('phase_spent', {})}\n"
+            f"Review attempts: {budget.get('review_attempts', 0)}\n\n"
+            "Set APSARA_MAX_STEPS, APSARA_MAX_TOOL_CALLS, and APSARA_MAX_TURN_TOKENS before launching.\n"
+            "Token enforcement uses local request estimates; this is not a provider billing cap."
+        )
+        return True, current_model
+
     if command_text == "/checkpoints":
         from apsara_cli.engine.tools import list_workspace_checkpoints
         with agent_runtime_context(workspace_root=options.workspace_root):
@@ -527,12 +617,18 @@ def handle_chat_command(
 
     if command_text == "/undo-turn" or command_text.startswith("/undo-turn "):
         from apsara_cli.engine.tools import undo_turn_checkpoint
-        turn_id = command_text[len("/undo-turn"):].strip()
-        if not ui.confirm_action("undo_turn", {"turn_id": turn_id or "latest"}):
+        parts = command_text[len("/undo-turn"):].split()
+        force = "--force" in parts
+        identifiers = [part for part in parts if part != "--force"]
+        if len(identifiers) > 1:
+            ui.error("Usage: /undo-turn [id] [--force]")
+            return True, current_model
+        turn_id = identifiers[0] if identifiers else ""
+        if not ui.confirm_action("undo_turn", {"turn_id": turn_id or "latest", "force": force}):
             ui.info("Turn rollback cancelled.")
             return True, current_model
         with agent_runtime_context(workspace_root=options.workspace_root, read_only=options.read_only):
-            result = undo_turn_checkpoint(turn_id)
+            result = undo_turn_checkpoint(turn_id, force=force)
         (ui.error if result.startswith("Error:") else ui.success)(result)
         return True, current_model
 
@@ -591,29 +687,38 @@ def handle_chat_command(
         ui.warning("Session cleared in memory")
         return True, current_model
 
-    if command_text == "/bug":
+    if command_text == "/bug" or command_text.startswith("/bug "):
+        argument = command_text[len("/bug"):].strip()
+        if argument not in {"", "--include-content"}:
+            ui.error("Usage: /bug [--include-content]")
+            return True, current_model
+        include_content = argument == "--include-content"
+        if include_content and not ui.confirm_action(
+            "export_diagnostic_content",
+            {"message_count": len(history)},
+        ):
+            ui.info("Diagnostic bundle cancelled.")
+            return True, current_model
         ui.info("Collecting diagnostic information for bug report...")
         try:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            bug_dir = options.workspace_root / ".apsara" / "bugs" / f"bug_{timestamp}"
-            bug_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Save current session
-            state_file = bug_dir / "session_state.json"
-            state = {
-                "model": current_model,
-                "history": history,
-                "options": {k: str(v) for k, v in vars(options).items()},
-            }
-            with state_file.open("w", encoding="utf-8") as f:
-                json.dump(state, f, indent=2)
-            
-            # Copy logs
-            if ui.log_file and ui.log_file.exists():
-                shutil.copy2(ui.log_file, bug_dir / "session.log")
-            
+            from apsara_cli.engine.diagnostics import create_diagnostic_bundle
+
+            bug_dir = create_diagnostic_bundle(
+                options.workspace_root,
+                current_model,
+                history,
+                options,
+                ui.log_file,
+                include_content=include_content,
+            )
             ui.success(f"Bug report data collected in: {bug_dir}")
-            ui.info("Please share this directory with the development team.")
+            if include_content:
+                ui.warning(
+                    "Conversation and tool content is included. Review every file before sharing."
+                )
+            else:
+                ui.info("Conversation and source content was omitted by default.")
+            ui.info("Review the bundle files before sharing them with the development team.")
         except Exception as e:
             ui.error(f"Failed to collect bug report data: {e}")
         return True, current_model
@@ -1124,11 +1229,22 @@ async def execute_instruction(
     from apsara_cli.engine.executor import run_agent_stream
     from apsara_cli.engine.llm import DEFAULT_MAX_COMPLETION_TOKENS
 
+    entry = lookup_model(model)
+    if entry:
+        selectable, reason = model_availability(entry)
+        if not selectable:
+            ui.error(reason)
+            ui.last_run_state = "failed"
+            ui.set_mascot_state("error")
+            return list(history), None
+
     next_history = list(history)
     next_history.append({"role": "user", "content": instruction})
     aggregate_usage: Optional[dict[str, Any]] = None
     turn_checkpoint_id: Optional[str] = None
     ui.begin_turn()
+    if entry and entry.tier == "paid":
+        ui.info(f"Model: {model} · {model_price_label(model)} · billed by {entry.provider}.")
 
     def merge_usage(data: dict[str, Any]) -> None:
         nonlocal aggregate_usage
@@ -1147,12 +1263,15 @@ async def execute_instruction(
         allowed_commands=options.allowed_commands,
         max_file_size_bytes=options.max_file_size,
         bash_timeout_seconds=options.bash_timeout,
-        confirmation_callback=None if options.auto_approve else ui.confirm_action,
+        # The UI applies --auto-approve only to reversible workspace writes.
+        # Commands and external mutations still require explicit approval.
+        confirmation_callback=ui.confirm_action,
         dry_run=options.dry_run,
         read_only=options.read_only,
         # Always ask, even under --auto-approve: that flag waives confirmation
         # for file writes, not for executing code shipped with the project.
         trust_callback=ui.confirm_action,
+        model=model,
     ):
         trim_result = await trim_history_for_request(next_history, model=model)
         if trim_result.auxiliary_usage:
@@ -1184,11 +1303,14 @@ async def execute_instruction(
                     print_event(event, ui)
                     update_history_from_event(next_history, event)
         except asyncio.CancelledError:
+            ui.set_mascot_state("cancelled")
             # Completed calls may already have provider totals; retain them,
             # then record the in-flight request separately as an estimate.
             if aggregate_usage:
                 ui.usage(aggregate_usage)
             ui.record_interrupted_usage(trim_result.trimmed_tokens, model)
+            from apsara_cli.cli.history import recover_interrupted_history
+            history[:] = recover_interrupted_history(next_history)
             save_if_needed(history, model, options, ui)
             raise
 
@@ -1256,10 +1378,13 @@ async def run_once(args: object, config: object) -> int:
         config_theme.apply_to(theme)
 
     ui = ConsoleUI(use_color=options.use_color, auto_approve=options.auto_approve, theme=theme)
+    ui.mascot.configure(config.ui)
     history: list[dict[str, Any]] = []
 
     if not options.stateless:
         history = load_session_messages(options.workspace_root, options.session)
+        from apsara_cli.cli.history import recover_interrupted_history
+        history = recover_interrupted_history(history)
         ui.restore_usage(load_session_usage(options.workspace_root, options.session))
 
     async with mcp_session(config, options, ui):
@@ -1275,7 +1400,8 @@ async def run_once(args: object, config: object) -> int:
         ui.usage(latest_usage)
     save_if_needed(updated_history, options.model, options, ui)
 
-    return 0
+    state = getattr(ui, "last_run_state", "completed")
+    return 0 if state in {"completed", "completed_verified"} else 2 if state == "completed_unverified" else 1
 
 
 async def chat_loop(args: object, config: object) -> int:
@@ -1293,12 +1419,15 @@ async def chat_loop(args: object, config: object) -> int:
         config_theme.apply_to(theme)
 
     ui = ConsoleUI(use_color=options.use_color, auto_approve=options.auto_approve, theme=theme)
+    ui.mascot.configure(config.ui)
     history: list[dict[str, Any]] = []
     current_model = options.model
     turn_count = 0
 
     if not options.stateless:
         history = load_session_messages(options.workspace_root, options.session)
+        from apsara_cli.cli.history import recover_interrupted_history
+        history = recover_interrupted_history(history)
         ui.restore_usage(load_session_usage(options.workspace_root, options.session))
 
     print_welcome_banner(ui, config)
@@ -1308,12 +1437,11 @@ async def chat_loop(args: object, config: object) -> int:
     from apsara_cli.shared.ui import terminal_width
     from apsara_cli import __version__
 
-    _terminal = max(48, min(terminal_width(), 112))
+    _terminal = max(12, min(terminal_width(), 112))
 
     def _center_pad(plain_len: int) -> str:
         return " " * max((_terminal - plain_len) // 2, 2)
 
-    session_label = sanitize_session_name(options.session) if not options.stateless else "stateless"
     _active_provider = get_active_provider()
     _model_entry = lookup_model(current_model)
     _key_ok = _model_entry is not None and (
@@ -1322,6 +1450,8 @@ async def chat_loop(args: object, config: object) -> int:
 
     # Keyboard hints, 'tab agents  ctrl+p commands' style.
     _hints = [("/", "commands"), ("esc+enter", "newline"), ("↑↓", "history")]
+    if _terminal < 64:
+        _hints = [("/", "commands"), ("↑↓", "history")]
     _hints_plain = "   ".join(f"{key} {label}" for key, label in _hints)
     _hints_styled = "   ".join(
         f"{ui.style(key, '1', '38;2;140;180;255')} {ui.dim(label)}" for key, label in _hints
@@ -1379,51 +1509,36 @@ async def chat_loop(args: object, config: object) -> int:
             f"{_gs_gap}{ui.style(_gs_cmd, '1', '38;2;180;210;255')}"
         )
 
-    # Bottom footer: workspace path left, session · version right, with
-    # colored accents (⌂ gold, session green, version violet).
-    _left_plain = f"⌂ {options.workspace_root}"
-    _right_plain = f"{session_label} · v{__version__}"
+    # Keep the welcome footer to workspace and version; session details are
+    # available through /session rather than competing with the composer.
+    from rich.text import Text
+    _workspace = str(options.workspace_root)
+    if options.workspace_root.is_relative_to(Path.home()):
+        _workspace = "~/" + str(options.workspace_root.relative_to(Path.home()))
+    _right_plain = f"v{__version__}"
+    _path = Text(_workspace)
+    _path.truncate(max(1, _terminal - len(_right_plain) - 9), overflow="ellipsis")
+    _left_plain = f"⌂ {_path.plain}"
     _gap = max(_terminal - len(_left_plain) - len(_right_plain) - 4, 2)
-    _left_styled = f"{ui.style('⌂', '38;2;240;190;110')} {ui.dim(str(options.workspace_root))}"
-    _right_styled = (
-        f"{ui.style(session_label, '38;2;130;210;160')}{ui.dim(' · ')}"
-        f"{ui.style('v' + __version__, '38;2;190;150;250')}"
-    )
+    _left_styled = f"{ui.style('⌂', '38;2;240;190;110')} {ui.dim(_path.plain)}"
+    _right_styled = ui.style(_right_plain, '38;2;190;150;250')
     ui.print_line()
     ui.print_line(f"  {_left_styled}{' ' * _gap}{_right_styled}")
-
-    _BOX_BORDER = "38;2;90;108;180"  # soft indigo, matches the TUI input box
 
     # Servers stay connected for the whole session rather than being
     # respawned each turn.
     async with mcp_session(config, options, ui):
         while True:
-            # OpenCode-style typing box: a rounded top border, a padding row, and
-            # a '│▌' gutter are part of the prompt itself; the bottom toolbar
-            # draws the box's lower edge carrying the 'Build · Model' mode line.
-            _w = max(40, min(terminal_width() - 2, 110))
-            _mode, _model_name, _provider = mode_line_parts(options, current_model)
-            _mode_plain = f"{_mode} · {_model_name}" + (f" {_provider}" if _provider else "")
-            _fill = max(_w - len(_mode_plain) - 6, 1)
-            _toolbar = (
-                ui.style("╰─ ", _BOX_BORDER)
-                + build_mode_line(ui, options, current_model)
-                + " "
-                + ui.style("─" * _fill + "╯", _BOX_BORDER)
-            )
-            _prompt = (
-                "\n"
-                + ui.style("╭" + "─" * (_w - 2) + "╮", _BOX_BORDER)
-                + "\n"
-                + ui.style("│", _BOX_BORDER)
-                + "\n"
-                + ui.style("│", _BOX_BORDER)
-                + ui.style("▌", ui.theme.accent)
-                + " "
+            _prompt, _toolbar, _continuation = build_scrolling_composer(
+                ui, options, current_model, terminal_width()
             )
             try:
                 instruction = (
-                    await get_input_async(_prompt, options.workspace_root, toolbar=_toolbar)
+                    await get_input_async(
+                        _prompt, options.workspace_root,
+                        toolbar=_toolbar, continuation=_continuation,
+                        use_color=options.use_color,
+                    )
                 ).strip()
             except KeyboardInterrupt:
                 ui.print_line()

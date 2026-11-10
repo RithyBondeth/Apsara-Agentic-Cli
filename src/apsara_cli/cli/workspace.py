@@ -10,14 +10,15 @@ from apsara_cli.shared.ui import ConsoleUI, default_use_color
 DEFAULT_CONFIG_TEMPLATE = """# Apsara Project Configuration
 [defaults]
 # workspace = "."
-# model = "opencode/big-pickle"
+# model = "opencode/space-bunny-free"
 # auto_approve = false
 
 # Let the agent verify its own work. Without a test runner on the allowlist it
 # can write code but never run it, so it cannot catch its own mistakes.
 # @verify expands to the common test/build tools (pytest, npm, go, cargo,
 # make, ...); @read and @git are also available. Every command still needs
-# your approval at run time unless you pass --auto-approve.
+# your explicit approval at run time; --auto-approve covers file mutations
+# only.
 # allow_bash = true
 # allowed_commands = ["@verify", "@git"]
 # bash_timeout = 120
@@ -83,7 +84,7 @@ async def init_workspace(args: argparse.Namespace, config: object) -> int:
     ignore_lines = [
         ".apsara/logs/", ".apsara/bugs/", ".apsara/runs/",
         ".apsara/checkpoints/", ".apsara/turns/", ".apsara/benchmarks/",
-        ".apsara/reports/", ".apsara-cli/",
+        ".apsara/reports/", ".apsara/tool-results/", ".apsara-cli/",
     ]
     if gitignore.exists():
         content = gitignore.read_text(encoding="utf-8")
@@ -97,11 +98,12 @@ async def init_workspace(args: argparse.Namespace, config: object) -> int:
         ui.success("Created .gitignore with Apsara entries.")
 
     if not getattr(args, "no_chat", False):
-        from apsara_cli.cli.chat import chat_loop
+        from apsara_cli.cli.parser import dispatch_command
         # Reload config for the chat loop
         from apsara_cli.config.cli_config import load_cli_config
         new_config = load_cli_config(str(config_file), str(workspace_root))
-        return await chat_loop(args, new_config)
+        chat_args = argparse.Namespace(**{**vars(args), "command": "chat"})
+        return await dispatch_command(chat_args, new_config)
     
     return 0
 

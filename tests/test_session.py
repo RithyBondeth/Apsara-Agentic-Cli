@@ -2,6 +2,7 @@
 import json
 import os
 import sys
+from datetime import datetime, timezone
 
 import pytest
 
@@ -34,6 +35,16 @@ def test_sanitize_empty_after_cleanup_raises():
 def test_sessions_dir_and_path(tmp_path):
     assert session.get_sessions_dir(tmp_path) == tmp_path / ".apsara-cli" / "sessions"
     assert session.get_session_path(tmp_path, "default").name == "default.json"
+
+
+def test_new_session_name_is_readable_and_unique():
+    now = datetime(2026, 8, 10, 1, 23, 45, tzinfo=timezone.utc)
+
+    first = session.new_session_name(now)
+    second = session.new_session_name(now)
+
+    assert first.startswith("session-20260810-012345-")
+    assert first != second
 
 
 # ── Save / load round-trip ────────────────────────────────────────────────────
@@ -97,3 +108,16 @@ def test_list_sessions_sorted(tmp_path):
     session.save_session_messages(tmp_path, "alpha", "m", [])
     names = [p.stem for p in session.list_sessions(tmp_path)]
     assert names == ["alpha", "zeta"]
+
+
+def test_latest_session_name_uses_modification_time(tmp_path):
+    older = session.save_session_messages(tmp_path, "older", "m", [])
+    newer = session.save_session_messages(tmp_path, "newer", "m", [])
+    os.utime(older, ns=(1_000_000_000, 1_000_000_000))
+    os.utime(newer, ns=(2_000_000_000, 2_000_000_000))
+
+    assert session.latest_session_name(tmp_path) == "newer"
+
+
+def test_latest_session_name_returns_none_without_saved_sessions(tmp_path):
+    assert session.latest_session_name(tmp_path) is None

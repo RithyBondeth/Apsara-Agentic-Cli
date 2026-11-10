@@ -13,7 +13,11 @@ the parser/checker behind those records can vary.
    syntax errors, and safe whole-symbol replacement with no extra install.
 2. Other supported languages use `tree-sitter-language-pack` when users install
    `apsara-agentic[intelligence]`. Parsers are loaded on demand.
-3. Without that extra, repository maps and symbol search retain a conservative
+3. Installed language servers provide on-demand, type-aware definition and
+   reference queries through `lsp_go_to_definition` and
+   `lsp_find_references`. Supported servers include Pyright,
+   typescript-language-server, gopls, rust-analyzer, and clangd.
+4. Without those extras, repository maps and symbol search retain a conservative
    regex fallback. A pattern match is never treated as precise enough for a
    whole-symbol replacement.
 
@@ -39,10 +43,11 @@ the tool response, so the model sees a syntax failure before it continues.
 Project checks stay explicit because they can compile dependencies, execute Go
 test initialization, or take minutes in a large repository.
 
-## Safety and future LSP support
+## Safety and LSP support
 
 All paths still pass through the workspace boundary, semantic writes use the
 same confirmation and checkpoint system as other mutations, and compiler
-commands use argument arrays rather than a shell. An LSP adapter can later emit
-the same record types, so adding type-aware references or rename does not
-change the agent-facing tool contract.
+commands use argument arrays rather than a shell. Language servers are launched
+on demand over stdio, receive only workspace file URIs, and returned locations
+outside the workspace are discarded. When no server is installed, the original
+AST and Tree-sitter tools continue to work.

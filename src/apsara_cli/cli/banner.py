@@ -144,7 +144,7 @@ def banner_taglines(config: "CliConfig") -> tuple[str, str]:
 def render_welcome_banner(ui: "ConsoleUI", config: "CliConfig") -> list[str]:
     from apsara_cli.shared.ui import terminal_width
 
-    terminal = max(48, min(terminal_width(), 112))
+    terminal = max(12, min(terminal_width(), 112))
     lines: list[str] = [""]
 
     if terminal >= logo_width() + 4:
@@ -154,7 +154,7 @@ def render_welcome_banner(ui: "ConsoleUI", config: "CliConfig") -> list[str]:
         plain_len = len(" ".join(_LOGO_WORD))
         lines.append(" " * max((terminal - plain_len) // 2, 2) + small_logo_line(ui))
 
-    wrap_w = max(36, min(68, terminal - 8))
+    wrap_w = max(1, min(68, terminal - 4))
     title = config.ui.welcome_title
     subtitle, powered = banner_taglines(config)
 

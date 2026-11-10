@@ -1,0 +1,81 @@
+{
+  "artifact_commit": "44a146d59767de4f5d5f04661cc9b3b918d50b0d",
+  "source_digest": "337ce2dde3a22ed84502d8074b3561c88dc04dfecf1eee97c88856d760390a53",
+  "live_benchmark_commit": "32ed04c39ee820e8cef2c270f5ecdea3cc293e17",
+  "local_tests_passed": 556,
+  "ci_checks": [
+    {
+      "name": "test (macos-latest, 3.10)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "test (macos-latest, 3.14)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "pipx (macos-latest, Python 3.10)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "test (macos-latest, 3.12)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "pipx (macos-latest, Python 3.14)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "test (macos-latest, 3.11)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "test (macos-latest, 3.13)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "pipx (ubuntu-latest, Python 3.10)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "test (ubuntu-latest, 3.10)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "test (ubuntu-latest, 3.13)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "pipx (windows-latest, Python 3.14)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "windows-smoke",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "pipx (windows-latest, Python 3.10)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "package",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "test (ubuntu-latest, 3.14)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "pipx (ubuntu-latest, Python 3.14)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "test (ubuntu-latest, 3.12)",
+      "state": "SUCCESS"
+    },
+    {
+      "name": "test (ubuntu-latest, 3.11)",
+      "state": "SUCCESS"
+    }
+  ],
+  "post_benchmark_safety_fix": "A failed fresh review clears the previous approval flag; covered by the final 556-test suite."
+}
